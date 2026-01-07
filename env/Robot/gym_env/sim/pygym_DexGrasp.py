@@ -133,15 +133,6 @@ class Gym():
         self.default_dof_pos = torch.tensor(self.default_dof_state["pos"],dtype=torch.float32,device=self.device)
         self.default_dof_pos = self.default_dof_pos.unsqueeze(0)
 
-        # set DOF control properties (except grippers)
-        # self.robot_dof_props["driveMode"][:7].fill(gymapi.DOF_MODE_POS)
-        # self.robot_dof_props["stiffness"][:7].fill(0.0)
-        # self.robot_dof_props["damping"][:7].fill(0.0)
-    
-        # # set DOF control properties for grippers
-        # self.robot_dof_props["driveMode"][7:].fill(gymapi.DOF_MODE_POS)
-        # self.robot_dof_props["stiffness"][7:].fill(0)
-        # self.robot_dof_props["damping"][7:].fill(0)
         self.torque_limits = torch.tensor(
             self.robot_dof_props["effort"],
             device=self.device,
@@ -158,8 +149,8 @@ class Gym():
             self.robot_dof_props["damping"][:7].fill(40)
 
             self.robot_dof_props["driveMode"][7:].fill(gymapi.DOF_MODE_POS)
-            self.robot_dof_props["stiffness"][7:].fill(50)
-            self.robot_dof_props["damping"][7:].fill(5)
+            self.robot_dof_props["stiffness"][7:].fill(8)
+            self.robot_dof_props["damping"][7:].fill(0.2)
 
 
 
@@ -759,12 +750,6 @@ class Gym():
         x_world = quat_rotate(quat, x_local)
 
         return x_world
-    
 
-    def get_finger_z_distance(self):
-        finger1_pos_z = self.rb_states[self.finger1_idxs, 2]
-        finger2_pos_z = self.rb_states[self.finger2_idxs, 2]
-        distance = abs(finger1_pos_z - finger2_pos_z)
 
-        return distance
 

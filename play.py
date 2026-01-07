@@ -43,7 +43,15 @@ def eval_policy(model_path: Optional[str] = None, episodes: int = 10, determinis
         raise FileNotFoundError(f"无效的模型路径: {model_path}")
 
     # 仅加载权重做推理
-    runner.load(model_path, load_optimizer=False)
+    device = env.device  # 通常是 cuda:0
+
+    checkpoint = torch.load(
+        model_path,
+        map_location=device
+    )
+
+    runner.alg.actor_critic.load_state_dict(checkpoint["model_state_dict"])
+    runner.alg.actor_critic.to(device)
     policy = runner.get_inference_policy(device=env.device)
 
     num_envs = env.num_envs

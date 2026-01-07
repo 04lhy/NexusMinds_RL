@@ -17,7 +17,7 @@ class Grasp_single_object(Task):
         self.alpha_mid = cfg.alpha_mid
         self.alpha_pos = cfg.alpha_pos
         self.alpha_down = cfg.alpha_down
-        self.alpha_z = cfg.alpha_z
+        self.alpha_align = cfg.alpha_align
         self.grasp_goal_distance = cfg.reward_scales["grasp_goal_distance"]
         self.grasp_mid_point = cfg.reward_scales["grasp_mid_point"]
         self.pos_reach_distance = cfg.reward_scales["pos_reach_distance"]
@@ -25,6 +25,9 @@ class Grasp_single_object(Task):
         self.body_collision_reset = cfg.reward_scales["body_collision_reset"]
         self.obj_reset = cfg.reward_scales["obj_reset"]
         self.hand_down = cfg.reward_scales["hand_down"]
+        self.hand_align = cfg.reward_scales["hand_align"]
+        #self.success = cfg.reward_scales["success"]
+        
         # self.finger_z_distance = cfg.reward_scales["finger_z_distance"]
 
         # 初始化目标缓存 (num_envs, 3)
@@ -46,7 +49,7 @@ class Grasp_single_object(Task):
     def reset_ids(self, env_ids: torch.Tensor) -> torch.Tensor:
 
         """只为指定环境重置目标"""
-        goals_pos = torch.tensor([0.5, 0, 0.5], dtype=torch.float32, device=self.device)
+        goals_pos = torch.tensor([0.5, 0, 0.525], dtype=torch.float32, device=self.device)
         goals_pos = goals_pos.unsqueeze(0).expand(self.num_envs, 3)
         self.goal = goals_pos
 
@@ -117,6 +120,23 @@ class Grasp_single_object(Task):
 
         reward = torch.exp(-self.alpha_down * (1.0 - cos_sim))
         return -self.hand_down * reward
+    
+    def reward_hand_align(self):
+        x_hand = self.sim.get_rigid_body_x_axis_world()
+
+        world_down = torch.tensor(
+            [0.0, 0.0, 1.0],
+            device=x_hand.device
+        ).expand_as(x_hand)
+
+        cos_sim = torch.sum(x_hand * world_down, dim=1)
+
+        mask = (cos_sim < 0.0).float()
+
+        align = cos_sim
+
+        reward = mask * torch.exp(-self.alpha_align * (1.0 + align))
+        return self.hand_align * reward
 
     def reward_finger_collision_reset(self):
         reset_events = self.sim.check_reset_events()
@@ -136,9 +156,6 @@ class Grasp_single_object(Task):
 
         return -self.obj_reset * obj_reset
     
-    # def reward_finger_z_distance(self):
-    #     distance = self.sim.get_finger_z_distance()
-    #     # distance = torch.norm(distance, dim=-1)
-    #     distance = 0.064-distance
-
-    #     return self.finger_z_distance * distance
+    # def reward_success(self):
+    #     success = self.is_success()
+    #     return self.success * success

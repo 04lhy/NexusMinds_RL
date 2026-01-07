@@ -135,12 +135,13 @@ class TaskCfg:
         self.c8 = 1
         self.c9 = 1
         self.c10 = 2
-        self.c11 = 5
+        self.c11 = 100
+        self.c12 = 2
 
         self.alpha_mid =1.5
         self.alpha_pos =1.5
         self.alpha_down = 1.5
-        self.alpha_z = 6
+        self.alpha_align = 1.5
 
         # 改为字典的方式：
         self.reward_scales = {
@@ -151,7 +152,8 @@ class TaskCfg:
             "body_collision_reset": self.c8,
             "obj_reset": self.c9,
             "hand_down": self.c10,
-            # "finger_z_distance": self.c11
+            #"success":self.c11,
+            "hand_align":self.c12
         }
 
 
