@@ -131,9 +131,9 @@ class TaskCfg:
         self.c4 = 1
         self.c5 = 10
         self.c6 = 3
-        self.c7 = 1
-        self.c8 = 1
-        self.c9 = 1
+        self.c7 = 10
+        self.c8 = 10
+        self.c9 = 10
         self.c10 = 2
         self.c11 = 100
         self.c12 = 2

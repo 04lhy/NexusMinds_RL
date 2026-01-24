@@ -87,7 +87,7 @@ class Gym():
         self.dof_names = self.gym.get_asset_dof_names(self.robot_asset)
         shape_props = self.gym.get_asset_rigid_shape_properties(self.robot_asset)
         for sp in shape_props:
-            sp.friction = 1.8             # 动摩擦系数
+            sp.friction = 1             # 动摩擦系数
             sp.rolling_friction = 0.0      # 滚动摩擦
             sp.torsion_friction = 0.0      # 扭转摩擦
             sp.restitution = 0.0           # 弹性（反弹）
@@ -108,7 +108,7 @@ class Gym():
         self.box_asset = self.gym.create_box(self.sim, box_size, box_size, box_size, asset_options)
         shape_props = self.gym.get_asset_rigid_shape_properties(self.box_asset)
         for sp in shape_props:
-            sp.friction = 1.2             # 动摩擦系数
+            sp.friction = 1           # 动摩擦系数
             sp.rolling_friction = 0.0      # 滚动摩擦
             sp.torsion_friction = 0.0      # 扭转摩擦
             sp.restitution = 0.0           # 弹性（反弹）
@@ -149,8 +149,8 @@ class Gym():
             self.robot_dof_props["damping"][:7].fill(40)
 
             self.robot_dof_props["driveMode"][7:].fill(gymapi.DOF_MODE_POS)
-            self.robot_dof_props["stiffness"][7:].fill(8)
-            self.robot_dof_props["damping"][7:].fill(0.2)
+            self.robot_dof_props["stiffness"][7:].fill(6)
+            self.robot_dof_props["damping"][7:].fill(0.17)
 
 
 

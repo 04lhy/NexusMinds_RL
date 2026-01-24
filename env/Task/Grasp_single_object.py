@@ -110,12 +110,6 @@ class Grasp_single_object(Task):
 
         cos_sim = torch.sum(x_hand * world_down, dim=1)
 
-        # 按照区间
-        # 0.86 按照姿态调整
-        # if cos_sim > 0 and cos_sim < 0.86:
-        #     reward = 0
-        # else:
-
         cos_sim = torch.clamp(cos_sim, 0.0, 1.0)
 
         reward = torch.exp(-self.alpha_down * (1.0 - cos_sim))
