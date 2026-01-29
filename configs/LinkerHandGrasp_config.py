@@ -8,7 +8,7 @@ args = gymutil.parse_arguments(
         {"name": "--use_gpu_pipeline", "type": bool, "default": False, "help": "Use GPU pipeline"},
         {"name": "--headless", "type": bool, "default": False, "help": "Run simulation without viewer"},
         {"name": "--logdir", "type": str, "default": "logs", "help": "Directory for logging"},
-        {"name": "--num_envs", "type":int, "default":20 , "help": "the number of environments to train"},
+        {"name": "--num_envs", "type":int, "default":1 , "help": "the number of environments to train"},
     ]   
 )
 
@@ -52,7 +52,11 @@ class RobotCfg:
 
         # 模型路径与姿态
         self.asset = "/home/gu/NexusMInds_RL/env/assets"
-        self.robot_files = "urdf/frankaLinkerHand_description/robots/frankaLinker.urdf"
+        self.urdf_files_dict = {
+            "frankaLinker": "urdf/frankaLinkerHand_description/robots/frankaLinker.urdf",
+            "ball": "urdf/ball.urdf",
+            "box": "urdf/box.urdf"
+        }
         # 每个机器人的初始位置是一样的吗
         self.base_pose = [0, 0, 0]  # 每个环境的机器人位置
         self.base_orn = [0, 0, 0, 1]  # 每个环境的机器人姿态

@@ -2,6 +2,7 @@ import random
 import time
 
 import numpy as np
+import matplotlib.pyplot as plt
 
 # gym应该要实现的接口
 from isaacgym import gymapi, gymutil
@@ -38,13 +39,6 @@ class Gym():
         else:
             raise Exception("This example can only be used with PhysX")
 
-        # 根据参数确定张量设备
-        # if getattr(args, 'use_gpu', False) or getattr(args, 'use_gpu_pipeline', False):
-        #     compute_id = getattr(args, 'compute_device_id', 0)
-        #     self.device = torch.device(f'cuda:{compute_id}') if torch.cuda.is_available() else torch.device('cpu')
-        # else:
-        #     self.device = torch.device('cpu')
-
         self.sim_device = args.sim_device            # 'cuda:0' / 'cuda:1' / 'cpu'  
         self.device = torch.device(self.sim_device)
         if self.sim_device.startswith("cuda"):
@@ -71,6 +65,8 @@ class Gym():
             self.gym.subscribe_viewer_keyboard_event(
                 self.viewer, gymapi.KEY_ESCAPE, "QUIT"
             )
+
+        self.camera_depth_debug = False
                     
             
             
@@ -100,26 +96,20 @@ class Gym():
         asset_options.fix_base_link = True
         self.table_asset = self.gym.create_box(self.sim, table_dims.x, table_dims.y, table_dims.z, asset_options)
 
-    def create_box_asset(self):
-        box_size = 0.05
+    def create_box_asset(self, urdf_file, asset_root):
+        # box_size = 0.05
         asset_options = gymapi.AssetOptions()
         asset_options.fix_base_link = False
         asset_options.thickness = 0.001
-        self.box_asset = self.gym.create_box(self.sim, box_size, box_size, box_size, asset_options)
+        # self.box_asset = self.gym.create_box(self.sim, box_size, box_size, box_size, asset_options)
+        self.box_asset = self.gym.load_asset(self.sim, asset_root, urdf_file, asset_options)
         shape_props = self.gym.get_asset_rigid_shape_properties(self.box_asset)
         for sp in shape_props:
-            sp.friction = 1           # 动摩擦系数
+            sp.friction = 0.5           # 动摩擦系数
             sp.rolling_friction = 0.0      # 滚动摩擦
             sp.torsion_friction = 0.0      # 扭转摩擦
-            sp.restitution = 0.0           # 弹性（反弹）
+            # sp.restitution = 0.0           # 弹性（反弹）
         self.gym.set_asset_rigid_shape_properties(self.box_asset, shape_props)
-
-    def create_ball_asset(self):
-        radius = 0.025
-        asset_options = gymapi.AssetOptions()
-        asset_options.disable_gravity = True
-        self.ball_asset = self.gym.create_sphere(self.sim, radius, asset_options)
-
 
     #后面接入参数，设置pd参数等等
     def set_dof_states_and_propeties(self, control_type):
@@ -168,11 +158,9 @@ class Gym():
         self.num_envs=num_envs
         self.envs=[]
 
-        self.table_handles=[]
-        self.table_idxs=[]
         self.box_handles=[]
-        self.box_idxs=[]
-        self.root_box_idxs=[]
+        self.box_idxs = {j: [] for j in range(6)}
+        self.root_box_idxs = {j: [] for j in range(6)}#现在结构 root_box_idxs[box_id][env_id] 后续使用时需要注意一下
 
         self.ee_handles=[]
         self.ee_idxs=[]
@@ -191,6 +179,33 @@ class Gym():
 
         self.init_pos_list=[]
         self.init_orn_list=[]
+
+        # if self.obs_type in ["point_cloud"]:
+        self.cameras = []
+        self.camera_tensors = []
+        self.camera_view_matrixs = []
+        self.camera_proj_matrixs = []
+
+        self.camera_props = gymapi.CameraProperties()
+        self.camera_props.width = 256
+        self.camera_props.height = 256
+        self.camera_props.enable_tensors = True
+
+        self.env_origin = torch.zeros((self.num_envs, 3), device=self.device, dtype=torch.float)
+        self.pointCloudDownsampleNum = 768
+        self.camera_u = torch.arange(0, self.camera_props.width, device=self.device)
+        self.camera_v = torch.arange(0, self.camera_props.height, device=self.device)
+
+        self.camera_v2, self.camera_u2 = torch.meshgrid(self.camera_v, self.camera_u, indexing='ij')
+
+            # if self.point_cloud_debug:
+            #     import open3d as o3d
+            #     from bidexhands.utils.o3dviewer import PointcloudVisualizer
+            #     self.pointCloudVisualizer = PointcloudVisualizer()
+            #     self.pointCloudVisualizerInitialized = False
+            #     self.o3d_pc = o3d.geometry.PointCloud()
+            # else:
+            #     self.pointCloudVisualizer = None
         
         # 环境对应的参数系数
         self.num_per_row = int(math.sqrt(self.num_envs))
@@ -203,22 +218,18 @@ class Gym():
             env = self.gym.create_env(self.sim, env_lower, env_upper, self.num_per_row)
             self.envs.append(env)
 
-            box_goal_pose = self.generate_random_box_goal_pose()
-
             table_handle = self.gym.create_actor(env, self.table_asset, table_pose, "table", i, 1)
-            self.table_handles.append(table_handle)
-            table_idx = self.gym.find_actor_rigid_body_index(env, table_handle, "table", gymapi.DOMAIN_SIM)
-            self.table_idxs.append(table_idx)
             
-
-            box_handle = self.gym.create_actor(env, self.box_asset, box_goal_pose, "box", i, 0)
-            red_color = gymapi.Vec3(1.0, 0.0, 0.0)  
-            self.gym.set_rigid_body_color(env, box_handle, 0, gymapi.MESH_VISUAL_AND_COLLISION, red_color)
-            self.box_handles.append(box_handle)
-            box_idx = self.gym.get_actor_rigid_body_index(env, box_handle, 0, gymapi.DOMAIN_SIM)
-            self.box_idxs.append(box_idx)
-            root_box_idx = self.gym.get_actor_index(env,box_handle,gymapi.DOMAIN_SIM)
-            self.root_box_idxs.append(root_box_idx)
+            for j in range(6):
+                box_pose = self.set_random_box_pose()
+                box_handle = self.gym.create_actor(env, self.box_asset, box_pose, f"box_{j}", i, 0)
+                red_color = gymapi.Vec3(1.0, 0.0, 0.0)  
+                self.gym.set_rigid_body_color(env, box_handle, 0, gymapi.MESH_VISUAL_AND_COLLISION, red_color)
+                self.box_handles.append(box_handle)
+                box_idx = self.gym.get_actor_rigid_body_index(env, box_handle, 0, gymapi.DOMAIN_SIM)
+                self.box_idxs[j].append(box_idx)
+                root_box_idx = self.gym.get_actor_index(env,box_handle,gymapi.DOMAIN_SIM)
+                self.root_box_idxs[j].append(root_box_idx)
 
             # Add franka
             robot_handle = self.gym.create_actor(env, self.robot_asset, pose, "franka", i, 1)
@@ -266,6 +277,23 @@ class Gym():
             ee_idx = self.gym.find_actor_rigid_body_index(env, robot_handle, "hand_base_link", gymapi.DOMAIN_SIM)
             self.ee_idxs.append(ee_idx)
 
+            # if self.obs_type in ["point_cloud"]:
+            camera_handle = self.gym.create_camera_sensor(env, self.camera_props)
+            self.gym.set_camera_location(camera_handle, env, gymapi.Vec3(0.8, 0.4, 0.8), gymapi.Vec3(0.55, 0, 0.325))
+            camera_tensor = self.gym.get_camera_image_gpu_tensor(self.sim, env, camera_handle, gymapi.IMAGE_DEPTH)
+            self.torch_cam_tensor = gymtorch.wrap_tensor(camera_tensor)
+            cam_vinv = torch.inverse((torch.tensor(self.gym.get_camera_view_matrix(self.sim, env, camera_handle)))).to(self.device)
+            cam_proj = torch.tensor(self.gym.get_camera_proj_matrix(self.sim, env, camera_handle), device=self.device)
+
+            origin = self.gym.get_env_origin(env)
+            self.env_origin[i][0] = origin.x
+            self.env_origin[i][1] = origin.y
+            self.env_origin[i][2] = origin.z
+            self.camera_tensors.append(self.torch_cam_tensor)
+            self.camera_view_matrixs.append(cam_vinv)
+            self.camera_proj_matrixs.append(cam_proj)
+            self.cameras.append(camera_handle)
+
 
     def set_camera(self):
         # Point camera at middle env
@@ -278,10 +306,10 @@ class Gym():
 
     def pre_simulate(self,num_envs,asset_root,asset_file,base_pos,base_orn,control_type):
         self.create_plane()
-        self.create_robot_asset(asset_file,asset_root)
+        self.create_robot_asset(asset_file["frankaLinker"],asset_root)
         self.create_table_asset()
-        self.create_box_asset()
-        self.create_ball_asset()
+        self.create_box_asset(asset_file["box"],asset_root)
+        #self.create_ball_asset(asset_file["ball"],asset_root)
 
         # get joint limits and ranges for Franka
         self.robot_dof_props = self.gym.get_asset_dof_properties(self.robot_asset)
@@ -347,8 +375,20 @@ class Gym():
         # Step the physics
         self.gym.simulate(self.sim)
         self.refresh()
+        
+        self.gym.fetch_results(self.sim, True)
+        self.gym.step_graphics(self.sim)
+        self.gym.render_all_camera_sensors(self.sim)
+        self.gym.start_access_image_tensors(self.sim)
+
+        if self.camera_depth_debug:
+           self.visualize_depth(0)
+
+        self.gym.end_access_image_tensors(self.sim)
+        
     # Step rendering (skip when headless)
         self.render()
+
 
     def refresh(self):
         # 看上层从底层读取了什么,那么这个地方就进行了一个什么refresh
@@ -550,21 +590,22 @@ class Gym():
             actor_handle = self.gym.find_actor_handle(self.envs[i], name)
             self.gym.set_rigid_transform(self.envs[i], actor_handle, transform)
 
-    def generate_random_box_goal_pose(self):
-        box_goal_pose = gymapi.Transform()
-        x = random.uniform(0.5, 0.7)
-        y = random.uniform(-0.1, 0.1)
-        z = 0.325
-        box_goal_pose.p = gymapi.Vec3(x, y, z)
-        box_goal_pose.r = gymapi.Quat(0, 0, 0, 1)
-        return box_goal_pose
-    
+    def set_random_box_pose(self):
+        box_pose = gymapi.Transform()
+        x = random.uniform(0.5, 0.6)
+        y = random.uniform(-0.05, 0.05)
+        # z = 0.325
+        z = random.uniform(0.325, 0.4)
+        box_pose.p = gymapi.Vec3(x, y, z)
+        box_pose.r = gymapi.Quat(0, 0, 0, 1)
+        return box_pose
+
     def get_obj_position(self):
-        box_goal_pose = self.root_states[self.root_box_idxs, :3]
-        return box_goal_pose
+        box_pose = self.root_states[self.root_box_idxs[0], :3]
+        return box_pose
     
     def get_obj_quaternion(self):
-        box_goal_quat = self.root_states[self.root_box_idxs, 3:7]
+        box_goal_quat = self.root_states[self.root_box_idxs[0], 3:7]
         return box_goal_quat
     
     def get_finger_collision_info(self):
@@ -602,9 +643,14 @@ class Gym():
     
     #物体重置条件
     def get_object_reset_info(self):
-        box_pos_z = self.rb_states[self.box_idxs, 2]
-        table_pos_z = 0.3
-        reset_obj = box_pos_z < table_pos_z
+        reset_all = []
+        for i in range(6):
+            box_pos_z = self.rb_states[self.box_idxs[i], 2]
+            table_pos_z = 0.3
+            reset_all.append(box_pos_z < table_pos_z)
+
+        reset_all = torch.stack(reset_all, dim=0)   
+        reset_obj = torch.any(reset_all, dim=0) 
         return {
             'reset_obj': reset_obj
         }
@@ -649,27 +695,16 @@ class Gym():
         
         
     def reset_object_states(self, env_ids):
-        # if env_ids is None or len(env_ids) == 0:
-        #     return
-        # # 确保最新的 dof tensor 已获取
-
-        # for env_idx in env_ids.tolist():
-
-        #     self.root_states[self.box_idxs, :3][env_idx] = self.initial_root_states[self.box_idxs, :3][env_idx]
-        #     self.root_states[self.box_idxs, 3:7][env_idx] = self.initial_root_states[self.box_idxs, 3:7][env_idx]
-        #     self.root_states[self.box_idxs, 7:13][env_idx] = torch.zeros(6, device=self.root_states.device)
-
-        # self.gym.set_actor_root_state_tensor(self.sim)
-        # self.refresh()
         if env_ids is None or len(env_ids) == 0:
             return
 
         for env_idx in env_ids.tolist():
-            reset_obj_idxs = self.root_box_idxs[env_idx]   # ✅ 关键一步
+            for box_id in range(6):
+                reset_obj_idxs = self.root_box_idxs[box_id][env_idx]   # ✅ 关键一步
 
-            self.root_states[reset_obj_idxs, 0:3] = self.initial_root_states[reset_obj_idxs, 0:3]
-            self.root_states[reset_obj_idxs, 3:7] = self.initial_root_states[reset_obj_idxs, 3:7]
-            self.root_states[reset_obj_idxs, 7:13] = torch.zeros(6, device=self.root_states.device)
+                self.root_states[reset_obj_idxs, 0:3] = self.initial_root_states[reset_obj_idxs, 0:3]
+                self.root_states[reset_obj_idxs, 3:7] = self.initial_root_states[reset_obj_idxs, 3:7]
+                self.root_states[reset_obj_idxs, 7:13] = torch.zeros(6, device=self.root_states.device)
 
         self.gym.set_actor_root_state_tensor(self.sim, gymtorch.unwrap_tensor(self.root_states))
         self.refresh()
@@ -751,5 +786,10 @@ class Gym():
 
         return x_world
 
-
-
+    def visualize_depth(self, env_id):
+        depth = self.camera_tensors[env_id]
+        depth = -depth
+        depth = torch.clamp(depth, 0.0, 2.0)
+        depth = depth / 2.0
+        plt.imshow(depth.cpu(), cmap='gray')
+        plt.pause(1e-6)
