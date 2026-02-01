@@ -1,8 +1,8 @@
 import random
 import time
+import open3d as o3d
 
 import numpy as np
-import matplotlib.pyplot as plt
 
 # gym应该要实现的接口
 from isaacgym import gymapi, gymutil
@@ -66,7 +66,8 @@ class Gym():
                 self.viewer, gymapi.KEY_ESCAPE, "QUIT"
             )
 
-        self.camera_depth_debug = False
+        self.camera_depth_debug = True
+        self.points_cloud_debug = False
                     
             
             
@@ -160,7 +161,8 @@ class Gym():
 
         self.box_handles=[]
         self.box_idxs = {j: [] for j in range(6)}
-        self.root_box_idxs = {j: [] for j in range(6)}#现在结构 root_box_idxs[box_id][env_id] 后续使用时需要注意一下
+        #现在结构 root_box_idxs[box_id][env_id] 后续使用时需要注意一下
+        self.root_box_idxs = {j: [] for j in range(6)}
 
         self.ee_handles=[]
         self.ee_idxs=[]
@@ -182,30 +184,22 @@ class Gym():
 
         # if self.obs_type in ["point_cloud"]:
         self.cameras = []
-        self.camera_tensors = []
+        self.depth_tensors = []
+        self.seg_tensors = []
         self.camera_view_matrixs = []
         self.camera_proj_matrixs = []
 
         self.camera_props = gymapi.CameraProperties()
-        self.camera_props.width = 256
-        self.camera_props.height = 256
+        self.camera_props.width = 640
+        self.camera_props.height = 480
         self.camera_props.enable_tensors = True
 
         self.env_origin = torch.zeros((self.num_envs, 3), device=self.device, dtype=torch.float)
-        self.pointCloudDownsampleNum = 768
         self.camera_u = torch.arange(0, self.camera_props.width, device=self.device)
         self.camera_v = torch.arange(0, self.camera_props.height, device=self.device)
 
         self.camera_v2, self.camera_u2 = torch.meshgrid(self.camera_v, self.camera_u, indexing='ij')
 
-            # if self.point_cloud_debug:
-            #     import open3d as o3d
-            #     from bidexhands.utils.o3dviewer import PointcloudVisualizer
-            #     self.pointCloudVisualizer = PointcloudVisualizer()
-            #     self.pointCloudVisualizerInitialized = False
-            #     self.o3d_pc = o3d.geometry.PointCloud()
-            # else:
-            #     self.pointCloudVisualizer = None
         
         # 环境对应的参数系数
         self.num_per_row = int(math.sqrt(self.num_envs))
@@ -222,7 +216,7 @@ class Gym():
             
             for j in range(6):
                 box_pose = self.set_random_box_pose()
-                box_handle = self.gym.create_actor(env, self.box_asset, box_pose, f"box_{j}", i, 0)
+                box_handle = self.gym.create_actor(env, self.box_asset, box_pose, f"box_{j}", i, 0, j+1)
                 red_color = gymapi.Vec3(1.0, 0.0, 0.0)  
                 self.gym.set_rigid_body_color(env, box_handle, 0, gymapi.MESH_VISUAL_AND_COLLISION, red_color)
                 self.box_handles.append(box_handle)
@@ -280,16 +274,19 @@ class Gym():
             # if self.obs_type in ["point_cloud"]:
             camera_handle = self.gym.create_camera_sensor(env, self.camera_props)
             self.gym.set_camera_location(camera_handle, env, gymapi.Vec3(0.8, 0.4, 0.8), gymapi.Vec3(0.55, 0, 0.325))
-            camera_tensor = self.gym.get_camera_image_gpu_tensor(self.sim, env, camera_handle, gymapi.IMAGE_DEPTH)
-            self.torch_cam_tensor = gymtorch.wrap_tensor(camera_tensor)
+            depth_tensor = self.gym.get_camera_image_gpu_tensor(self.sim, env, camera_handle, gymapi.IMAGE_DEPTH)
+            self.torch_dep_tensor = gymtorch.wrap_tensor(depth_tensor)
+            seg_tensor = self.gym.get_camera_image_gpu_tensor(self.sim, env, camera_handle, gymapi.IMAGE_SEGMENTATION)
+            self.torch_seg_tensor = gymtorch.wrap_tensor(seg_tensor)
+
             cam_vinv = torch.inverse((torch.tensor(self.gym.get_camera_view_matrix(self.sim, env, camera_handle)))).to(self.device)
             cam_proj = torch.tensor(self.gym.get_camera_proj_matrix(self.sim, env, camera_handle), device=self.device)
-
             origin = self.gym.get_env_origin(env)
             self.env_origin[i][0] = origin.x
             self.env_origin[i][1] = origin.y
             self.env_origin[i][2] = origin.z
-            self.camera_tensors.append(self.torch_cam_tensor)
+            self.depth_tensors.append(self.torch_dep_tensor)
+            self.seg_tensors.append(self.torch_seg_tensor)
             self.camera_view_matrixs.append(cam_vinv)
             self.camera_proj_matrixs.append(cam_proj)
             self.cameras.append(camera_handle)
@@ -327,6 +324,9 @@ class Gym():
         self.set_camera()
         self.gym.prepare_sim(self.sim)
         self.get_state_tensors()
+
+        if self.points_cloud_debug:
+           self.init_point_cloud_visualizer()
 
     def get_state_tensors(self):
 
@@ -382,7 +382,16 @@ class Gym():
         self.gym.start_access_image_tensors(self.sim)
 
         if self.camera_depth_debug:
-           self.visualize_depth(0)
+           #seg_depth = self.segment_depth_image(self.depth_tensors[0], self.seg_tensors[0], 0)
+           #seg_depth = seg_depth[1]#选取物体深度图
+           #self.visualize_depth(seg_depth)
+           self.visualize_depth(self.depth_tensors[0])
+
+        if self.points_cloud_debug:
+           seg_depth = self.segment_depth_image(self.depth_tensors[0], self.seg_tensors[0], 0)
+           seg_depth = seg_depth[1]
+           seg_points = obj_depth_image_to_point_cloud_GPU(seg_depth, self.camera_view_matrixs[0], self.camera_proj_matrixs[0], self.camera_u2, self.camera_v2, float(self.camera_props.width), float(self.camera_props.height), 2.0, self.device)
+           self.visualize_point_cloud(seg_points)
 
         self.gym.end_access_image_tensors(self.sim)
         
@@ -786,10 +795,102 @@ class Gym():
 
         return x_world
 
-    def visualize_depth(self, env_id):
-        depth = self.camera_tensors[env_id]
+    
+    def segment_depth_image(self, depth_tensor, seg_tensor, env_id, num_target_points=200, num_other_points=50):
+        H, W = depth_tensor.shape
+        segmented_depths = {}
+        seg_flat = seg_tensor.view(-1)
+        depth_flat = depth_tensor.view(-1)
+
+        for box_id in range(6):
+            actor_id = self.root_box_idxs[box_id][env_id]
+            mask = seg_flat == actor_id  
+
+            # 获取该物体的有效深度像素
+            obj_depth_flat = depth_flat[mask]
+            num_points = num_target_points if box_id == 0 else num_other_points  # 目标物体为 200，其他物体为 50
+
+            # 如果该物体有足够的有效深度像素，随机采样
+            if obj_depth_flat.shape[0] >= num_points:
+                # 随机采样 num_points 个像素
+                sampled_indices = torch.randperm(obj_depth_flat.shape[0])[:num_points]
+                sampled_depth = obj_depth_flat[sampled_indices]
+                pad_value = 0
+                padding = torch.full((obj_depth_flat.shape[0] - sampled_depth.shape[0],), pad_value, device=sampled_depth.device)
+                sampled_depth = torch.cat([sampled_depth, padding], dim=0)
+            else:
+                # 如果像素点不足，保留所有像素点
+                sampled_depth = obj_depth_flat
+
+            # 生成裁剪后的深度图
+            seg_depth_flat = torch.zeros_like(depth_flat)
+            seg_depth_flat[mask] = sampled_depth
+
+            # 将裁剪后的深度图恢复为原始图像形状
+            segmented_depths[box_id] = seg_depth_flat.view(depth_tensor.shape)
+
+        return segmented_depths
+    
+
+    ##############################     visualize_API    ###################################
+    def visualize_depth(self, depth_tensor):
+        depth = depth_tensor
         depth = -depth
         depth = torch.clamp(depth, 0.0, 2.0)
         depth = depth / 2.0
+        import matplotlib.pyplot as plt
         plt.imshow(depth.cpu(), cmap='gray')
         plt.pause(1e-6)
+
+    def init_point_cloud_visualizer(self):
+        import open3d as o3d
+        self.vis = o3d.visualization.Visualizer()
+        self.vis.create_window(window_name="Point Cloud", width=800, height=600)
+        self.pcd = o3d.geometry.PointCloud()
+
+    def visualize_point_cloud(self, point_cloud, visualizer=False):
+        if visualizer is True:
+            self.pcd.points = o3d.utility.Vector3dVector(point_cloud.detach().cpu().numpy())
+            self.vis.add_geometry(self.pcd)
+            self.vis.update_geometry(self.pcd)
+            self.vis.update_renderer()
+            self.vis.poll_events()
+        
+        if visualizer is False:
+            self.pcd = o3d.geometry.PointCloud()
+            self.pcd.points = o3d.utility.Vector3dVector(point_cloud.detach().cpu().numpy())
+            o3d.visualization.draw_geometries([self.pcd])
+    ############################################################################################
+
+
+@torch.jit.script
+def obj_depth_image_to_point_cloud_GPU(obj_depth_tensor, camera_view_matrix_inv, camera_proj_matrix, u, v, width:float, height:float, depth_bar:float, device:torch.device):
+
+    depth_buffer = obj_depth_tensor.to(device)
+
+    vinv = camera_view_matrix_inv
+
+    proj = camera_proj_matrix
+    fu = 2/proj[0, 0]
+    fv = 2/proj[1, 1]
+
+    centerU = width/2
+    centerV = height/2
+
+    Z = depth_buffer
+    X = -(u-centerU)/width * Z * fu
+    Y = (v-centerV)/height * Z * fv
+
+    Z = Z.view(-1)
+    valid = Z > -depth_bar
+    X = X.view(-1)
+    Y = Y.view(-1)
+
+    position = torch.vstack((X, Y, Z, torch.ones(len(X), device=device)))[:, valid]
+    position = position.permute(1, 0)
+    position = position@vinv
+
+    points = position[:, 0:3]
+
+
+    return points
