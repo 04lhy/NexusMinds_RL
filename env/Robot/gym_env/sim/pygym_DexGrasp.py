@@ -66,7 +66,7 @@ class Gym():
                 self.viewer, gymapi.KEY_ESCAPE, "QUIT"
             )
 
-        self.camera_depth_debug = True
+        self.camera_depth_debug = False
         self.points_cloud_debug = False
                     
             
@@ -389,9 +389,12 @@ class Gym():
 
         if self.points_cloud_debug:
            seg_depth = self.segment_depth_image(self.depth_tensors[0], self.seg_tensors[0], 0)
-           seg_depth = seg_depth[1]
+           seg_depth = seg_depth[2]
            seg_points = obj_depth_image_to_point_cloud_GPU(seg_depth, self.camera_view_matrixs[0], self.camera_proj_matrixs[0], self.camera_u2, self.camera_v2, float(self.camera_props.width), float(self.camera_props.height), 2.0, self.device)
+           print(seg_points)
            self.visualize_point_cloud(seg_points)
+
+        #self.get_point_cloud()
 
         self.gym.end_access_image_tensors(self.sim)
         
@@ -800,10 +803,13 @@ class Gym():
         H, W = depth_tensor.shape
         segmented_depths = {}
         seg_flat = seg_tensor.view(-1)
+        #print(torch.unique(seg_flat))
         depth_flat = depth_tensor.view(-1)
 
         for box_id in range(6):
             actor_id = self.root_box_idxs[box_id][env_id]
+            actor_id = actor_id - 8 * env_id
+            #print(f"Segmenting depth for Box ID {box_id} with Actor ID {actor_id} in Env ID {env_id}")
             mask = seg_flat == actor_id  
 
             # 获取该物体的有效深度像素
@@ -818,9 +824,11 @@ class Gym():
                 pad_value = 0
                 padding = torch.full((obj_depth_flat.shape[0] - sampled_depth.shape[0],), pad_value, device=sampled_depth.device)
                 sampled_depth = torch.cat([sampled_depth, padding], dim=0)
+                #print(f"Box ID {box_id}: Sampled {num_points} points from {obj_depth_flat.shape[0]} available pixels.")
             else:
                 # 如果像素点不足，保留所有像素点
                 sampled_depth = obj_depth_flat
+                #print(f"Box ID {box_id}: Only {obj_depth_flat.shape[0]} available pixels, less than {num_points} required.")
 
             # 生成裁剪后的深度图
             seg_depth_flat = torch.zeros_like(depth_flat)
@@ -831,6 +839,21 @@ class Gym():
 
         return segmented_depths
     
+    def get_point_cloud(self):
+        obj_points_cloud = {}
+        for env_id in range(self.num_envs):
+            seg_depth = self.segment_depth_image(self.depth_tensors[env_id], self.seg_tensors[env_id], env_id)
+            for box_id in range(6):
+                obj_depth_tensor = seg_depth[box_id]
+                obj_points = obj_depth_image_to_point_cloud_GPU(obj_depth_tensor, self.camera_view_matrixs[env_id], self.camera_proj_matrixs[env_id], self.camera_u2, self.camera_v2, float(self.camera_props.width), float(self.camera_props.height), 2.0, self.device)
+                # mask = obj_points[:,2]<0.8
+                # obj_points = obj_points[mask]
+                #print(f"obj_points for env_id {env_id}, box_id {box_id}: {len(obj_points)}")
+                env_origin = self.env_origin[env_id]  # [x, y, z]
+                obj_points_local = obj_points - env_origin
+                obj_points_cloud[(env_id, box_id)] = obj_points_local
+                #print(obj_points_local)
+        return obj_points_cloud
 
     ##############################     visualize_API    ###################################
     def visualize_depth(self, depth_tensor):
@@ -848,7 +871,7 @@ class Gym():
         self.vis.create_window(window_name="Point Cloud", width=800, height=600)
         self.pcd = o3d.geometry.PointCloud()
 
-    def visualize_point_cloud(self, point_cloud, visualizer=False):
+    def visualize_point_cloud(self, point_cloud, visualizer=True):
         if visualizer is True:
             self.pcd.points = o3d.utility.Vector3dVector(point_cloud.detach().cpu().numpy())
             self.vis.add_geometry(self.pcd)
@@ -882,7 +905,9 @@ def obj_depth_image_to_point_cloud_GPU(obj_depth_tensor, camera_view_matrix_inv,
     Y = (v-centerV)/height * Z * fv
 
     Z = Z.view(-1)
-    valid = Z > -depth_bar
+    #valid = Z > -depth_bar
+    valid = torch.logical_and(Z > -depth_bar, torch.abs(Z) > 1e-6)
+    #valid = (Z > -depth_bar) & (torch.abs(Z) > 1e-6)
     X = X.view(-1)
     Y = Y.view(-1)
 
