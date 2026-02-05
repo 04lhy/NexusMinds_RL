@@ -36,7 +36,7 @@ class FrankaReachRandPointsGym(RobotTaskEnv):
 
 
 # 需要修改
-class LinkerHandGraspGym(RobotTaskEnv):
+class LinkerHandGraspSingleGym(RobotTaskEnv):
     def __init__(self,cfg) -> None:
         sim = Gym(cfg.gymcfg)
         robot = LinkerHand06(sim, cfg.robotcfg)
@@ -47,3 +47,17 @@ class LinkerHandGraspGym(RobotTaskEnv):
             robot,
             task,
             cfg)
+        
+
+class LinkerHandGraspDexterousGym(RobotTaskEnv):
+    def __init__(self,cfg) -> None:
+        sim = Gym(cfg.gymcfg)
+        robot = LinkerHand06(sim, cfg.robotcfg)
+        task = Grasp_dexterous_object(sim, cfg.taskcfg)
+
+        # 调用父类初始化，传入机器人、任务和配置
+        super().__init__(
+            robot,
+            task,
+            cfg)
+        

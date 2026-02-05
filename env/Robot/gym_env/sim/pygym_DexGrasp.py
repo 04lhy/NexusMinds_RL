@@ -146,7 +146,7 @@ class Gym():
 
 
 
-    def create_envs_and_actors(self,num_envs,base_pos,base_orn):
+    def create_envs_and_actors(self,num_envs,base_pos,base_orn,obs_type):
         # 首先是根据 base_pos和base_orn创建对应的 gyapi.Transform()
         pose=gymapi.Transform()
         pose.p =gymapi.Vec3(base_pos[0],base_pos[1],base_pos[2])
@@ -170,7 +170,9 @@ class Gym():
         self.hand_base_idxs=[]
 
         self.finger1_idxs=[]
+        self.finger12_idxs=[]
         self.finger2_idxs=[]
+        self.finger22_idxs=[]
         self.finger3_idxs=[]
         self.finger4_idxs=[]  
         self.finger5_idxs=[]
@@ -182,25 +184,25 @@ class Gym():
         self.init_pos_list=[]
         self.init_orn_list=[]
 
-        # if self.obs_type in ["point_cloud"]:
-        self.cameras = []
-        self.depth_tensors = []
-        self.seg_tensors = []
-        self.camera_view_matrixs = []
-        self.camera_proj_matrixs = []
+        if obs_type  == "point_cloud":
+            self.cameras = []
+            self.depth_tensors = []
+            self.seg_tensors = []
+            self.camera_view_matrixs = []
+            self.camera_proj_matrixs = []
 
-        self.camera_props = gymapi.CameraProperties()
-        self.camera_props.width = 640
-        self.camera_props.height = 480
-        self.camera_props.enable_tensors = True
+            self.camera_props = gymapi.CameraProperties()
+            self.camera_props.width = 640
+            self.camera_props.height = 480
+            self.camera_props.enable_tensors = True
 
-        self.env_origin = torch.zeros((self.num_envs, 3), device=self.device, dtype=torch.float)
-        self.camera_u = torch.arange(0, self.camera_props.width, device=self.device)
-        self.camera_v = torch.arange(0, self.camera_props.height, device=self.device)
+            self.env_origin = torch.zeros((self.num_envs, 3), device=self.device, dtype=torch.float)
+            self.camera_u = torch.arange(0, self.camera_props.width, device=self.device)
+            self.camera_v = torch.arange(0, self.camera_props.height, device=self.device)
 
-        self.camera_v2, self.camera_u2 = torch.meshgrid(self.camera_v, self.camera_u, indexing='ij')
+            self.camera_v2, self.camera_u2 = torch.meshgrid(self.camera_v, self.camera_u, indexing='ij')
 
-        
+            
         # 环境对应的参数系数
         self.num_per_row = int(math.sqrt(self.num_envs))
         spacing = 1.0
@@ -247,14 +249,19 @@ class Gym():
             #get finger pose
             finger1_idx = self.gym.find_actor_rigid_body_index(env, robot_handle, "thumb_distal", gymapi.DOMAIN_SIM)
             self.finger1_idxs.append(finger1_idx)
+            finger12_idx = self.gym.find_actor_rigid_body_index(env, robot_handle, "thumb_metacarpals", gymapi.DOMAIN_SIM)
+            self.finger12_idxs.append(finger12_idx)
             finger2_idx = self.gym.find_actor_rigid_body_index(env, robot_handle, "index_distal", gymapi.DOMAIN_SIM)
             self.finger2_idxs.append(finger2_idx)
+            finger22_idx = self.gym.find_actor_rigid_body_index(env, robot_handle, "index_proximal", gymapi.DOMAIN_SIM)
+            self.finger22_idxs.append(finger22_idx)
             finger3_idx = self.gym.find_actor_rigid_body_index(env, robot_handle, "middle_distal", gymapi.DOMAIN_SIM)
             self.finger3_idxs.append(finger3_idx)
             finger4_idx = self.gym.find_actor_rigid_body_index(env, robot_handle, "ring_distal", gymapi.DOMAIN_SIM)
             self.finger4_idxs.append(finger4_idx)
             finger5_idx = self.gym.find_actor_rigid_body_index(env, robot_handle, "pinky_distal", gymapi.DOMAIN_SIM)
             self.finger5_idxs.append(finger5_idx)
+            
 
             body_link3_idx = self.gym.find_actor_rigid_body_index(env, robot_handle, "panda_link3", gymapi.DOMAIN_SIM)
             self.body_link3_idxs.append(body_link3_idx)
@@ -271,25 +278,25 @@ class Gym():
             ee_idx = self.gym.find_actor_rigid_body_index(env, robot_handle, "hand_base_link", gymapi.DOMAIN_SIM)
             self.ee_idxs.append(ee_idx)
 
-            # if self.obs_type in ["point_cloud"]:
-            camera_handle = self.gym.create_camera_sensor(env, self.camera_props)
-            self.gym.set_camera_location(camera_handle, env, gymapi.Vec3(0.8, 0.4, 0.8), gymapi.Vec3(0.55, 0, 0.325))
-            depth_tensor = self.gym.get_camera_image_gpu_tensor(self.sim, env, camera_handle, gymapi.IMAGE_DEPTH)
-            self.torch_dep_tensor = gymtorch.wrap_tensor(depth_tensor)
-            seg_tensor = self.gym.get_camera_image_gpu_tensor(self.sim, env, camera_handle, gymapi.IMAGE_SEGMENTATION)
-            self.torch_seg_tensor = gymtorch.wrap_tensor(seg_tensor)
+            if obs_type  == "point_cloud":
+                camera_handle = self.gym.create_camera_sensor(env, self.camera_props)
+                self.gym.set_camera_location(camera_handle, env, gymapi.Vec3(0.8, 0.4, 0.8), gymapi.Vec3(0.55, 0, 0.325))
+                depth_tensor = self.gym.get_camera_image_gpu_tensor(self.sim, env, camera_handle, gymapi.IMAGE_DEPTH)
+                self.torch_dep_tensor = gymtorch.wrap_tensor(depth_tensor)
+                seg_tensor = self.gym.get_camera_image_gpu_tensor(self.sim, env, camera_handle, gymapi.IMAGE_SEGMENTATION)
+                self.torch_seg_tensor = gymtorch.wrap_tensor(seg_tensor)
 
-            cam_vinv = torch.inverse((torch.tensor(self.gym.get_camera_view_matrix(self.sim, env, camera_handle)))).to(self.device)
-            cam_proj = torch.tensor(self.gym.get_camera_proj_matrix(self.sim, env, camera_handle), device=self.device)
-            origin = self.gym.get_env_origin(env)
-            self.env_origin[i][0] = origin.x
-            self.env_origin[i][1] = origin.y
-            self.env_origin[i][2] = origin.z
-            self.depth_tensors.append(self.torch_dep_tensor)
-            self.seg_tensors.append(self.torch_seg_tensor)
-            self.camera_view_matrixs.append(cam_vinv)
-            self.camera_proj_matrixs.append(cam_proj)
-            self.cameras.append(camera_handle)
+                cam_vinv = torch.inverse((torch.tensor(self.gym.get_camera_view_matrix(self.sim, env, camera_handle)))).to(self.device)
+                cam_proj = torch.tensor(self.gym.get_camera_proj_matrix(self.sim, env, camera_handle), device=self.device)
+                origin = self.gym.get_env_origin(env)
+                self.env_origin[i][0] = origin.x
+                self.env_origin[i][1] = origin.y
+                self.env_origin[i][2] = origin.z
+                self.depth_tensors.append(self.torch_dep_tensor)
+                self.seg_tensors.append(self.torch_seg_tensor)
+                self.camera_view_matrixs.append(cam_vinv)
+                self.camera_proj_matrixs.append(cam_proj)
+                self.cameras.append(camera_handle)
 
 
     def set_camera(self):
@@ -301,7 +308,7 @@ class Gym():
         middle_env = self.envs[self.num_envs // 2 + self.num_per_row // 2]
         self.gym.viewer_camera_look_at(self.viewer, middle_env, cam_pos, cam_target)
 
-    def pre_simulate(self,num_envs,asset_root,asset_file,base_pos,base_orn,control_type):
+    def pre_simulate(self,num_envs,asset_root,asset_file,base_pos,base_orn,control_type,obs_type):
         self.create_plane()
         self.create_robot_asset(asset_file["frankaLinker"],asset_root)
         self.create_table_asset()
@@ -317,10 +324,12 @@ class Gym():
         self.robot_mids = 0.5 * (self.robot_upper_limits + self.robot_lower_limits)
         self.robot_num_dofs = len(self.robot_dof_props)
 
+        self.obj_target_points = self.sample_points_on_object_surface(num_points=200,box_size=torch.tensor([0.06, 0.04, 0.008], device=self.device))
+        self.obj_other_points = self.sample_points_on_object_surface(num_points=10,box_size=torch.tensor([0.06, 0.04, 0.008], device=self.device))
+
         self.set_dof_states_and_propeties(control_type)
         # 创建环境和设置实例
-        self.create_envs_and_actors(num_envs,base_pos,base_orn)
-
+        self.create_envs_and_actors(num_envs,base_pos,base_orn,obs_type)
         self.set_camera()
         self.gym.prepare_sim(self.sim)
         self.get_state_tensors()
@@ -362,7 +371,7 @@ class Gym():
 
 
     # 仿真步骤步进一次
-    def step(self,u,control_type):
+    def step(self,u,control_type,obs_type):
         if control_type == "effort" :
             # Set tensor action
             self.gym.set_dof_actuation_force_tensor(self.sim, gymtorch.unwrap_tensor(u))
@@ -375,30 +384,42 @@ class Gym():
         # Step the physics
         self.gym.simulate(self.sim)
         self.refresh()
+
+        # d = torch.norm(self.get_dpos(), dim=-1)
+        # print(d)
+        # print("distance:",torch.min(d))
+        # d_min = torch.min(d)
+        # rpos_per_finger_min = torch.exp(1*d_min)
+        # print(rpos_per_finger_min)
+        # rpos_per_finger = torch.exp(1 * d)
+        # print("rpos_per_finger",rpos_per_finger)
+        # reward_pos = torch.min(rpos_per_finger, dim=-1).values
+        # print(reward_pos)
+
+
+        if obs_type  == "point_cloud":
+            self.gym.fetch_results(self.sim, True)
+            self.gym.step_graphics(self.sim)
+            self.gym.render_all_camera_sensors(self.sim)
+            self.gym.start_access_image_tensors(self.sim)
+
+            if self.camera_depth_debug:
+            #seg_depth = self.segment_depth_image(self.depth_tensors[0], self.seg_tensors[0], 0)
+            #seg_depth = seg_depth[1]#选取物体深度图
+            #self.visualize_depth(seg_depth)
+                self.visualize_depth(self.depth_tensors[0])
+
+            if self.points_cloud_debug:
+                seg_depth = self.segment_depth_image(self.depth_tensors[0], self.seg_tensors[0], 0)
+                seg_depth = seg_depth[2]
+                seg_points = obj_depth_image_to_point_cloud_GPU(seg_depth, self.camera_view_matrixs[0], self.camera_proj_matrixs[0], self.camera_u2, self.camera_v2, float(self.camera_props.width), float(self.camera_props.height), 2.0, self.device)
+                print(seg_points)
+                self.visualize_point_cloud(seg_points)
+
+                #self.get_point_cloud()
+
+            self.gym.end_access_image_tensors(self.sim)
         
-        self.gym.fetch_results(self.sim, True)
-        self.gym.step_graphics(self.sim)
-        self.gym.render_all_camera_sensors(self.sim)
-        self.gym.start_access_image_tensors(self.sim)
-
-        if self.camera_depth_debug:
-           #seg_depth = self.segment_depth_image(self.depth_tensors[0], self.seg_tensors[0], 0)
-           #seg_depth = seg_depth[1]#选取物体深度图
-           #self.visualize_depth(seg_depth)
-           self.visualize_depth(self.depth_tensors[0])
-
-        if self.points_cloud_debug:
-           seg_depth = self.segment_depth_image(self.depth_tensors[0], self.seg_tensors[0], 0)
-           seg_depth = seg_depth[2]
-           seg_points = obj_depth_image_to_point_cloud_GPU(seg_depth, self.camera_view_matrixs[0], self.camera_proj_matrixs[0], self.camera_u2, self.camera_v2, float(self.camera_props.width), float(self.camera_props.height), 2.0, self.device)
-           print(seg_points)
-           self.visualize_point_cloud(seg_points)
-
-        #self.get_point_cloud()
-
-        self.gym.end_access_image_tensors(self.sim)
-        
-    # Step rendering (skip when headless)
         self.render()
 
 
@@ -797,7 +818,93 @@ class Gym():
         x_world = quat_rotate(quat, x_local)
 
         return x_world
+    
+    def sample_points_on_object_surface(self, num_points, box_size):
+        ##仅针对立方体物体，后续需要修改为适应更多物体
+        lx, ly, lz = box_size
+        n = num_points // 6
+        pts = []
 
+        # z faces
+        x = torch.rand(n, device=self.device) * lx - lx/2
+        y = torch.rand(n, device=self.device) * ly - ly/2
+        pts.append(torch.stack([x, y, torch.full_like(x,  lz/2)], dim=1))
+        pts.append(torch.stack([x, y, torch.full_like(x, -lz/2)], dim=1))
+
+        # x faces
+        y = torch.rand(n, device=self.device) * ly - ly/2
+        z = torch.rand(n, device=self.device) * lz - lz/2
+        pts.append(torch.stack([torch.full_like(y,  lx/2), y, z], dim=1))
+        pts.append(torch.stack([torch.full_like(y, -lx/2), y, z], dim=1))
+
+        # y faces
+        x = torch.rand(n, device=self.device) * lx - lx/2
+        z = torch.rand(n, device=self.device) * lz - lz/2
+        pts.append(torch.stack([x, torch.full_like(x,  ly/2), z], dim=1))
+        pts.append(torch.stack([x, torch.full_like(x, -ly/2), z], dim=1))
+
+        return torch.cat(pts, dim=0)
+    
+    def quat_to_rotmat(self,q):
+        """
+        q: (..., 4)  [x, y, z, w]
+        return: (..., 3, 3)
+        """
+        x, y, z, w = q.unbind(-1)
+
+        R = torch.stack([
+            1 - 2*(y*y + z*z), 2*(x*y - z*w),     2*(x*z + y*w),
+            2*(x*y + z*w),     1 - 2*(x*x + z*z), 2*(y*z - x*w),
+            2*(x*z - y*w),     2*(y*z + x*w),     1 - 2*(x*x + y*y),
+        ], dim=-1).view(q.shape[:-1] + (3, 3))
+
+        return R 
+    
+    def get_points_on_object_surface(self):
+        target_points_world = None
+        other_points_world = []
+        for box_id in range(6):
+            box_pos = self.root_states[self.root_box_idxs[box_id], 0:3]
+            box_quat = self.root_states[self.root_box_idxs[box_id], 3:7]
+            box_points_local = self.obj_target_points if box_id == 0 else self.obj_other_points
+            R = self.quat_to_rotmat(box_quat)
+            points_local = box_points_local.unsqueeze(0).expand(self.num_envs, -1, -1)  
+            points_world = torch.matmul(points_local, R.transpose(-1, -2)) + box_pos.unsqueeze(1) 
+            if box_id == 0:
+                target_points_world = points_world # (Nenv, 200, 3)
+            else:
+                other_points_world.append(points_world)
+
+        other_points_world = torch.cat(other_points_world, dim=1) # (Nenv, 10*5, 3)
+        return target_points_world, other_points_world
+    
+    def get_finger_positions(self): 
+        finger1_pos = self.rb_states[self.finger1_idxs, :3]
+        finger12_pos = self.rb_states[self.finger12_idxs, :3]
+        finger2_pos = self.rb_states[self.finger2_idxs, :3]
+        finger22_pos = self.rb_states[self.finger22_idxs, :3]
+        finger_base_pos = torch.stack([finger1_pos, finger12_pos, finger2_pos, finger22_pos],dim=1)# (Nenv, 4, 3)
+        return finger_base_pos
+    
+    def get_dpos(self):
+        finger_base_pos = self.get_finger_positions() # (Nenv, 4, 3)
+        target_points_world, _ = self.get_points_on_object_surface() # (Nenv, 200, 3)
+        dpos_dist = torch.norm(finger_base_pos.unsqueeze(2) - target_points_world.unsqueeze(1), dim=-1) # (Nenv, 4, 200)
+        idx = dpos_dist.argmin(dim=-1) # (Nenv, 4)
+        idx_expanded = idx.unsqueeze(-1).expand(-1, -1, 3) # (Nenv, 4, 3)
+        closest_points = torch.gather(target_points_world, dim=1, index=idx_expanded) # (Nenv, 4, 3)
+        dpos = closest_points - finger_base_pos # (Nenv, 4, 3)
+        return dpos
+    
+    def get_dneg(self):
+        finger_base_pos = self.get_finger_positions() # (Nenv, 4, 3)
+        _, other_points_world = self.get_points_on_object_surface() # (Nenv, 10*5, 3)
+        dneg_dist = torch.norm(finger_base_pos.unsqueeze(2) - other_points_world.unsqueeze(1), dim=-1) # (Nenv, 4, 10*5)
+        idx = dneg_dist.argmin(dim=-1) # (Nenv, 4)
+        idx_expanded = idx.unsqueeze(-1).expand(-1, -1, 3) # (Nenv, 4, 3)
+        closest_points = torch.gather(other_points_world, dim=1, index=idx_expanded) # (Nenv, 4, 3)
+        dneg = closest_points - finger_base_pos # (Nenv, 4, 3)
+        return dneg
     
     def segment_depth_image(self, depth_tensor, seg_tensor, env_id, num_target_points=200, num_other_points=50):
         H, W = depth_tensor.shape

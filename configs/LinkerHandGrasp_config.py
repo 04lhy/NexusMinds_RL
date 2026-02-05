@@ -8,7 +8,7 @@ args = gymutil.parse_arguments(
         {"name": "--use_gpu_pipeline", "type": bool, "default": False, "help": "Use GPU pipeline"},
         {"name": "--headless", "type": bool, "default": False, "help": "Run simulation without viewer"},
         {"name": "--logdir", "type": str, "default": "logs", "help": "Directory for logging"},
-        {"name": "--num_envs", "type":int, "default":4, "help": "the number of environments to train"},
+        {"name": "--num_envs", "type":int, "default":20, "help": "the number of environments to train"},
     ]   
 )
 
@@ -43,12 +43,14 @@ class RobotCfg:
     def __init__(self,global_cfg):
         # 控制相关参数
         self.control_type = "position"
+        self.obs_type = "state"
         self.block_gripper = True
         self.num_actions = 18
-        self.num_obs = 51
+        self.num_obs = 75
         self.robot_num_dofs = 18
         self.num_envs = global_cfg.num_envs  # 修改其他配置一致
         self.control_type_sim = "position"
+        self.obs_type_sim = "state"
 
         # 模型路径与姿态
         self.asset = "/home/gu/NexusMInds_RL/env/assets"
@@ -144,6 +146,7 @@ class TaskCfg:
 
         self.alpha_mid =1.5
         self.alpha_pos =1.5
+        self.alpha_neg = 1.5
         self.alpha_down = 1.5
         self.alpha_align = 1.5
 
@@ -173,6 +176,7 @@ class AllCfg:
         self.max_episode_length_s = 4.0  # 秒数形式（用于日志统计）
         self.decimation = 4
         self.control_type_sim = "position"
+        self.obs_type_sim = "state"
 
 
 class LinkGraspCfg:

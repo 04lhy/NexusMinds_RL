@@ -204,7 +204,7 @@ class RobotTaskEnv():
         # 这个地方设置 control.decimation。
 
         for _ in range(self.cfg.all.decimation):
-            self.sim.step(action_sim, self.cfg.all.control_type_sim)
+            self.sim.step(action_sim, self.cfg.all.control_type_sim, self.cfg.all.obs_type_sim)
 
         # 更新的问题！！！！，这个更新放到仿真环境里面，就是robot的接口一定要是完全合适的。
 
