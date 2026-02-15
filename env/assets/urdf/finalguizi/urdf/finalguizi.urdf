@@ -1,0 +1,206 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- This URDF was automatically created by SolidWorks to URDF Exporter! Originally created by Stephen Brawner (brawner@gmail.com) 
+     Commit Version: 1.6.0-4-g7f85cfe  Build Version: 1.6.7995.38578
+     For more information, please see http://wiki.ros.org/sw_urdf_exporter -->
+<robot
+  name="finalguizi.SLDASM">
+  <link
+    name="base_link">
+    <inertial>
+      <origin
+        xyz="-0.561338114816831 0.744283347252242 1.5"
+        rpy="0 0 0" />
+      <mass
+        value="81.3116882358968" />
+      <inertia
+        ixx="15.6196861372056"
+        ixy="0.000471335765372673"
+        ixz="-1.07736976857099E-18"
+        iyy="13.3260799103019"
+        iyz="-2.44792039132809E-17"
+        izz="28.9240829306446" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://finalguizi/meshes/base_link.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.792156862745098 0.819607843137255 0.933333333333333 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://finalguizi/meshes/base_link.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <link
+    name="left_Link">
+    <inertial>
+      <origin
+        xyz="-1.05006256357391 0.75 -0.209225742066298"
+        rpy="0 0 0" />
+      <mass
+        value="40.5" />
+      <inertia
+        ixx="8.57790000000001"
+        ixy="-3.27629141532889E-32"
+        ixz="-1.85037170770859E-16"
+        iyy="0.992587500000002"
+        iyz="8.60631368184848E-31"
+        izz="7.60218750000001" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://finalguizi/meshes/left_Link.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.792156862745098 0.819607843137255 0.933333333333333 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://finalguizi/meshes/left_Link.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="lfixed"
+    type="fixed">
+    <origin
+      xyz="-0.18625 -1.9992 0.0017223"
+      rpy="1.5708 0 0" />
+    <parent
+      link="base_link" />
+    <child
+      link="left_Link" />
+    <axis
+      xyz="0 0 0" />
+  </joint>
+  <link
+    name="right_Link">
+    <inertial>
+      <origin
+        xyz="-1.05006256357391 0.75 -0.209225742066298"
+        rpy="0 0 0" />
+      <mass
+        value="40.5" />
+      <inertia
+        ixx="8.57790000000001"
+        ixy="-1.27057878275548E-32"
+        ixz="-1.85037170770859E-16"
+        iyy="0.992587500000002"
+        iyz="-1.73472347597681E-16"
+        izz="7.60218750000001" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://finalguizi/meshes/right_Link.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.792156862745098 0.819607843137255 0.933333333333333 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://finalguizi/meshes/right_Link.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="rfixed"
+    type="fixed">
+    <origin
+      xyz="1.1637 -1.9992 0.0017223"
+      rpy="1.5708 0 0" />
+    <parent
+      link="base_link" />
+    <child
+      link="right_Link" />
+    <axis
+      xyz="0 0 0" />
+  </joint>
+  <link
+    name="taizi">
+    <inertial>
+      <origin
+        xyz="-0.582667870449744 -0.0838425560155797 0.23"
+        rpy="0 0 0" />
+      <mass
+        value="40.3" />
+      <inertia
+        ixx="1.41659392473118"
+        ixy="5.88146371626907E-16"
+        ixz="-1.48488432063944E-15"
+        iyy="6.96652666666666"
+        iyz="0.387855"
+        izz="5.80123392473118" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://finalguizi/meshes/taizi.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.792156862745098 0.819607843137255 0.933333333333333 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://finalguizi/meshes/taizi.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="midfixed"
+    type="fixed">
+    <origin
+      xyz="0.021355 -1.52 0.98653"
+      rpy="1.5708 0 0" />
+    <parent
+      link="base_link" />
+    <child
+      link="taizi" />
+    <axis
+      xyz="0 0 0" />
+  </joint>
+</robot>

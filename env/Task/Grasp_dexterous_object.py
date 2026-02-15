@@ -9,6 +9,7 @@ class Grasp_dexterous_object(Task):
         super().__init__(sim)
         self.sim = sim
         self.reward_type = cfg.reward_type
+        self.robot_type = cfg.robot_type
         self.distance_threshold = cfg.distance_threshold
         self.device = cfg.device
         self.num_envs = cfg.num_envs
@@ -27,6 +28,7 @@ class Grasp_dexterous_object(Task):
         self.obj_reset = cfg.reward_scales["obj_reset"]
         self.hand_down = cfg.reward_scales["hand_down"]
         self.hand_align = cfg.reward_scales["hand_align"]
+        self.penalty_rnegtive = cfg.reward_scales["penalty_rnegtive"]
         #self.success = cfg.reward_scales["success"]
         
         # self.finger_z_distance = cfg.reward_scales["finger_z_distance"]
@@ -78,12 +80,18 @@ class Grasp_dexterous_object(Task):
 
         rneg = torch.min(rneg_per_finger, dim=-1).values
 
-        penalty_rneg = 1 - rneg
+        # penalty_rneg = 1 - rneg
 
-        return penalty_rneg
+        # return penalty_rneg
+        return rneg
+    
+    def reward_penatly_rnegtive(self):
+        penalty = self.penalty_rneg()
+
+        return -self.penalty_rnegtive * penalty
      
     def reward_grasp_goal_distance(self):
-        penalty = self.penalty_rneg()
+        # penalty = self.penalty_rneg()
 
         achieved_goal = self.get_achieved_goal()
 
@@ -93,10 +101,10 @@ class Grasp_dexterous_object(Task):
         else:
             goal_distance = d
 
-        return self.grasp_goal_distance * (0.2 - goal_distance) * penalty
+        return self.grasp_goal_distance * (0.2 - goal_distance) 
 
     def reward_grasp_mid_point(self):
-        penalty = self.penalty_rneg()
+        # penalty = self.penalty_rneg()
 
         two_fingers_mid = self.sim.get_two_fingers_mid_point()
         d_mid = two_fingers_mid - self.sim.get_obj_position()
@@ -104,7 +112,7 @@ class Grasp_dexterous_object(Task):
         dist = torch.norm(d_mid, dim=-1)  # [N]
         r_neg = torch.exp(-self.alpha_mid * dist)  # exp(-α_neg * d_neg_min)
 
-        return self.grasp_mid_point * r_neg * penalty
+        return self.grasp_mid_point * r_neg 
 
     # def reward_pos_reach_distance(self):
 
@@ -117,15 +125,15 @@ class Grasp_dexterous_object(Task):
     #     return self.pos_reach_distance * reward_pos
 
     def reward_pos_reach_distance(self):
-        penalty = self.penalty_rneg()
+        # penalty = self.penalty_rneg()
 
         d = torch.norm(self.sim.get_dpos(), dim=-1)
 
         rpos_per_finger = torch.exp(-self.alpha_pos * d)
 
-        reward_pos = torch.min(rpos_per_finger, dim=-1).values
+        reward_pos = torch.mean(rpos_per_finger, dim=-1)
 
-        return self.pos_reach_distance * reward_pos * penalty 
+        return self.pos_reach_distance * reward_pos 
 
     def reward_hand_down(self):
         x_hand = self.sim.get_rigid_body_x_axis_world()
@@ -172,7 +180,7 @@ class Grasp_dexterous_object(Task):
         return -self.body_collision_reset * body_reset
 
     def reward_obj_reset(self):
-        reset_events = self.sim.check_reset_events()
+        reset_events = self.sim.check_reset_events(self.robot_type)
         obj_reset = reset_events['obj_reset'].float()
 
         return -self.obj_reset * obj_reset

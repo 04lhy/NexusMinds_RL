@@ -61,3 +61,16 @@ class LinkerHandGraspDexterousGym(RobotTaskEnv):
             task,
             cfg)
         
+
+class RealmanGraspSingleGym(RobotTaskEnv):
+    def __init__(self,cfg) -> None:
+        sim = Gym(cfg.gymcfg)
+        robot = Realman(sim, cfg.robotcfg)
+        task = Realman_Grasp_single_object(sim, cfg.taskcfg)
+
+        # 调用父类初始化，传入机器人、任务和配置
+        super().__init__(
+            robot,
+            task,
+            cfg)
+        

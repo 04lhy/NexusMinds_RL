@@ -79,9 +79,12 @@ class Gym():
         asset_options.armature = 0.01
         asset_options.disable_gravity = True
         asset_options.thickness = 0.001
+        asset_options.override_inertia = True
+        asset_options.override_com = True
         print("Loading asset '%s' from '%s'" % (urdf_file, asset_root))
         self.robot_asset = self.gym.load_asset(self.sim, asset_root, urdf_file, asset_options)
         self.dof_names = self.gym.get_asset_dof_names(self.robot_asset)
+        self.dof_dict = self.gym.get_asset_dof_dict(self.robot_asset)
         shape_props = self.gym.get_asset_rigid_shape_properties(self.robot_asset)
         for sp in shape_props:
             sp.friction = 1             # 动摩擦系数
@@ -90,12 +93,37 @@ class Gym():
             sp.restitution = 0.0           # 弹性（反弹）
         self.gym.set_asset_rigid_shape_properties(self.robot_asset, shape_props)
 
+        # tendon_props = gymapi.TendonProperties()
+        # tendon_props.stiffness = 1000
+        # tendon_props.damping = 50
+        # tendon = self.gym.create_asset_fixed_tendon(self.robot_asset, tendon_props)
+
+        # self.gym.add_asset_tendon_joint(self.robot_asset, tendon, self.dof_dict["Left_1_Joint"], 1.0)
+        # self.gym.add_asset_tendon_joint(self.robot_asset, tendon, self.dof_dict["Left_2_Joint"], 1.0)
+        # self.gym.add_asset_tendon_joint(self.robot_asset, tendon, self.dof_dict["Left_Support_Joint"], 1.0)
+        # self.gym.add_asset_tendon_joint(self.robot_asset, tendon, self.dof_dict["Right_1_Joint"], -1.0)
+        # self.gym.add_asset_tendon_joint(self.robot_asset, tendon, self.dof_dict["Right_2_Joint"], -1.0)
+        # self.gym.add_asset_tendon_joint(self.robot_asset, tendon, self.dof_dict["Right_Support_Joint"], -1.0)
+
     def create_table_asset(self):
         # 创建模板
         table_dims = gymapi.Vec3(1, 1, 0.3)
         asset_options = gymapi.AssetOptions()
         asset_options.fix_base_link = True
         self.table_asset = self.gym.create_box(self.sim, table_dims.x, table_dims.y, table_dims.z, asset_options)
+
+    def create_racks_aesset(self, urdf_file, asset_root):
+        asset_options = gymapi.AssetOptions()
+        asset_options.fix_base_link = True
+        asset_options.thickness = 0.001
+        self.racks_asset = self.gym.load_asset(self.sim, asset_root, urdf_file, asset_options)
+        shape_props = self.gym.get_asset_rigid_shape_properties(self.racks_asset)
+        for sp in shape_props:
+            sp.friction = 0.5           # 动摩擦系数
+            sp.rolling_friction = 0.0      # 滚动摩擦
+            sp.torsion_friction = 0.0      # 扭转摩擦
+            # sp.restitution = 0.0           # 弹性（反弹）
+        self.gym.set_asset_rigid_shape_properties(self.racks_asset, shape_props)
 
     def create_box_asset(self, urdf_file, asset_root):
         # box_size = 0.05
@@ -113,94 +141,119 @@ class Gym():
         self.gym.set_asset_rigid_shape_properties(self.box_asset, shape_props)
 
     #后面接入参数，设置pd参数等等
-    def set_dof_states_and_propeties(self, control_type):
+    def set_dof_states_and_propeties(self, robot_type, control_type):
 
         # set default DOF states
-        self.default_dof_state = np.zeros(self.robot_num_dofs, gymapi.DofState.dtype)
-        self.default_dof_state["pos"][:7] = self.robot_mids[:7]
-        self.default_dof_state["pos"][7:15] = 0
-        self.default_dof_state["pos"][15:16] = 1
-        self.default_dof_state["pos"][16:] = 0
-        self.default_dof_pos = torch.tensor(self.default_dof_state["pos"],dtype=torch.float32,device=self.device)
-        self.default_dof_pos = self.default_dof_pos.unsqueeze(0)
+        if robot_type == "frankaLinker":
+            self.default_dof_state = np.zeros(self.robot_num_dofs, gymapi.DofState.dtype)
+            self.default_dof_state["pos"][:7] = self.robot_mids[:7]
+            self.default_dof_state["pos"][7:15] = 0
+            self.default_dof_state["pos"][15:16] = 1
+            self.default_dof_state["pos"][16:] = 0
+            self.default_dof_pos = torch.tensor(self.default_dof_state["pos"], dtype=torch.float32, device=self.device)
+            self.default_dof_pos = self.default_dof_pos.unsqueeze(0)
 
-        self.torque_limits = torch.tensor(
-            self.robot_dof_props["effort"],
-            device=self.device,
-            dtype=torch.float32
-        )
-        self.torque_limits = self.torque_limits.unsqueeze(0) 
+            self.torque_limits = torch.tensor(self.robot_dof_props["effort"], device=self.device, dtype=torch.float32)
+            self.torque_limits = self.torque_limits.unsqueeze(0) 
 
-        
-        if control_type == "effort" :
-            self.robot_dof_props["driveMode"][:].fill(gymapi.DOF_MODE_EFFORT)
-        elif control_type == "position" :
-            self.robot_dof_props["driveMode"][:7].fill(gymapi.DOF_MODE_POS)
-            self.robot_dof_props["stiffness"][:7].fill(400) #参数需要修改
-            self.robot_dof_props["damping"][:7].fill(40)
+            
+            if control_type == "effort" :
+                self.robot_dof_props["driveMode"][:].fill(gymapi.DOF_MODE_EFFORT)
+            elif control_type == "position" :
+                    self.robot_dof_props["driveMode"][:7].fill(gymapi.DOF_MODE_POS)
+                    self.robot_dof_props["stiffness"][:7].fill(400) #参数需要修改
+                    self.robot_dof_props["damping"][:7].fill(40)
 
-            self.robot_dof_props["driveMode"][7:].fill(gymapi.DOF_MODE_POS)
-            self.robot_dof_props["stiffness"][7:].fill(6)
-            self.robot_dof_props["damping"][7:].fill(0.17)
+                    self.robot_dof_props["driveMode"][7:].fill(gymapi.DOF_MODE_POS)
+                    self.robot_dof_props["stiffness"][7:].fill(6)
+                    self.robot_dof_props["damping"][7:].fill(0.17)
+
+        elif robot_type == "realman":
+            self.default_dof_state = np.zeros(self.robot_num_dofs, gymapi.DofState.dtype)
+            self.default_dof_state["pos"][:1] = -0.75
+            self.default_dof_state["pos"][1:2] = 0
+            self.default_dof_state["pos"][2:3] = -2
+            self.default_dof_state["pos"][3:14] = 0
+            self.default_dof_state["pos"][14:15] = -0.37
+            self.default_dof_state["pos"][15:16] = -0.65
+            self.default_dof_state["pos"][16:17] = -2.22
+            self.default_dof_state["pos"][17:18] = -1.14
+            self.default_dof_state["pos"][18:21] = 0
+            self.default_dof_state["pos"][21:22] = -1.6
+            self.default_dof_state["pos"][22:23] = -0.3
+            self.default_dof_state["pos"][23:] = 0
+            self.default_dof_pos = torch.tensor(self.default_dof_state["pos"], dtype=torch.float32, device=self.device)
+            self.default_dof_pos = self.default_dof_pos.unsqueeze(0)
+
+            self.torque_limits = torch.tensor(self.robot_dof_props["effort"], device=self.device, dtype=torch.float32)
+            self.torque_limits = self.torque_limits.unsqueeze(0) 
+
+            if control_type == "effort" :
+                self.robot_dof_props["driveMode"][:].fill(gymapi.DOF_MODE_EFFORT)
+            elif control_type == "position" :
+                self.robot_dof_props["driveMode"][:16].fill(gymapi.DOF_MODE_POS)
+                self.robot_dof_props["stiffness"][:16].fill(400) #参数需要修改
+                self.robot_dof_props["damping"][:16].fill(40)
+
+                self.robot_dof_props["driveMode"][16:23].fill(gymapi.DOF_MODE_POS)
+                self.robot_dof_props["stiffness"][16:23].fill(400) #参数需要修改
+                self.robot_dof_props["damping"][16:23].fill(40)
+
+                self.robot_dof_props["driveMode"][23:24].fill(gymapi.DOF_MODE_POS)
+                self.robot_dof_props["stiffness"][23:24].fill(800) #夹爪参数参考gym官方示例
+                self.robot_dof_props["damping"][23:24].fill(40)
+
+                for i in range(24, 29): 
+                    self.robot_dof_props["driveMode"][i].fill(gymapi.DOF_MODE_POS)
+                    self.robot_dof_props["stiffness"][i] = 2000  
+                    self.robot_dof_props["damping"][i] = 100
+
+                # self.robot_dof_props["driveMode"][24:].fill(gymapi.DOF_MODE_NONE)
 
 
-
-
-    def create_envs_and_actors(self,num_envs,base_pos,base_orn,obs_type):
+    def create_envs_and_actors(self,num_envs,base_pos,base_orn,obs_type,robot_type):
         # 首先是根据 base_pos和base_orn创建对应的 gyapi.Transform()
         pose=gymapi.Transform()
         pose.p =gymapi.Vec3(base_pos[0],base_pos[1],base_pos[2])
         pose.r=gymapi.Quat(base_orn[0],base_orn[1],base_orn[2],base_orn[3])
 
-        table_pose = gymapi.Transform()
-        table_pose.p = gymapi.Vec3(0.7, 0.0, 0.15)
+        # table_pose = gymapi.Transform()
+        # table_pose.p = gymapi.Vec3(0.7, 0.0, 0.15)
+
+        racks_pose = gymapi.Transform()
+        racks_pose.p = gymapi.Vec3(2.7, -0.55, 0)
+        racks_pose.r = gymapi.Quat(0, 0, -0.7071, 0.7071)
 
 
         self.num_envs=num_envs
         self.envs=[]
 
+        self.racks_handles=[]
+        self.racks_idxs=[]
+
+        self.box_num = 1
         self.box_handles=[]
-        self.box_idxs = {j: [] for j in range(6)}
+        self.box_idxs = {j: [] for j in range(self.box_num)}
         #现在结构 root_box_idxs[box_id][env_id] 后续使用时需要注意一下
-        self.root_box_idxs = {j: [] for j in range(6)}
+        self.root_box_idxs = {j: [] for j in range(self.box_num)}
 
-        self.ee_handles=[]
-        self.ee_idxs=[]
 
-        self.hand_base_idxs=[]
+        self.cameras = []
+        self.depth_tensors = []
+        self.seg_tensors = []
+        self.camera_view_matrixs = []
+        self.camera_proj_matrixs = []
 
-        self.finger1_idxs=[]
-        self.finger12_idxs=[]
-        self.finger2_idxs=[]
-        self.finger22_idxs=[]
-        self.finger3_idxs=[]
-        self.finger4_idxs=[]  
-        self.finger5_idxs=[]
-        self.body_link3_idxs=[]
-        self.body_link4_idxs=[]
-        self.body_link5_idxs=[]
-        self.body_link6_idxs=[]
+        self.camera_props = gymapi.CameraProperties()
+        self.camera_props.width = 640
+        self.camera_props.height = 480
+        self.camera_props.enable_tensors = True
 
-        self.init_pos_list=[]
-        self.init_orn_list=[]
+        self.env_origin = torch.zeros((self.num_envs, 3), device=self.device, dtype=torch.float)
+        self.camera_u = torch.arange(0, self.camera_props.width, device=self.device)
+        self.camera_v = torch.arange(0, self.camera_props.height, device=self.device)
 
-        if obs_type  == "point_cloud":
-            self.cameras = []
-            self.depth_tensors = []
-            self.seg_tensors = []
-            self.camera_view_matrixs = []
-            self.camera_proj_matrixs = []
-
-            self.camera_props = gymapi.CameraProperties()
-            self.camera_props.width = 640
-            self.camera_props.height = 480
-            self.camera_props.enable_tensors = True
-
-            self.env_origin = torch.zeros((self.num_envs, 3), device=self.device, dtype=torch.float)
-            self.camera_u = torch.arange(0, self.camera_props.width, device=self.device)
-            self.camera_v = torch.arange(0, self.camera_props.height, device=self.device)
-
-            self.camera_v2, self.camera_u2 = torch.meshgrid(self.camera_v, self.camera_u, indexing='ij')
+        self.camera_v2, self.camera_u2 = torch.meshgrid(self.camera_v, self.camera_u, indexing='ij')
 
             
         # 环境对应的参数系数
@@ -214,9 +267,14 @@ class Gym():
             env = self.gym.create_env(self.sim, env_lower, env_upper, self.num_per_row)
             self.envs.append(env)
 
-            table_handle = self.gym.create_actor(env, self.table_asset, table_pose, "table", i, 1)
+            #table_handle = self.gym.create_actor(env, self.table_asset, table_pose, "table", i, 1)
+
+            racks_handle = self.gym.create_actor(env, self.racks_asset, racks_pose, "racks", i, 1)
+            self.racks_handles.append(racks_handle)
+            # racks_idx = self.gym.find_actor_rigid_body_index(env, racks_handle, "base_link", gymapi.DOMAIN_SIM)
+            # self.racks_idxs.append(racks_idx)
             
-            for j in range(6):
+            for j in range(self.box_num):
                 box_pose = self.set_random_box_pose()
                 box_handle = self.gym.create_actor(env, self.box_asset, box_pose, f"box_{j}", i, 0, j+1)
                 red_color = gymapi.Vec3(1.0, 0.0, 0.0)  
@@ -227,56 +285,122 @@ class Gym():
                 root_box_idx = self.gym.get_actor_index(env,box_handle,gymapi.DOMAIN_SIM)
                 self.root_box_idxs[j].append(root_box_idx)
 
-            # Add franka
-            robot_handle = self.gym.create_actor(env, self.robot_asset, pose, "franka", i, 1)
 
-            # Set initial DOF states
-            self.gym.set_actor_dof_states(env, robot_handle, self.default_dof_state, gymapi.STATE_ALL)
+            if robot_type == "frankaLinker":
+                self.ee_handles=[]
+                self.ee_idxs=[]
 
-            # Set DOF control properties
-            self.gym.set_actor_dof_properties(env, robot_handle, self.robot_dof_props)
+                self.hand_base_idxs=[]
 
-            # Get inital ee pose
-            ee_handle = self.gym.find_actor_rigid_body_handle(env, robot_handle, "hand_base_link")
-            self.ee_handles.append(ee_handle)
-            ee_pose = self.gym.get_rigid_transform(env, ee_handle)
-            self.init_pos_list.append([ee_pose.p.x, ee_pose.p.y, ee_pose.p.z])
-            self.init_orn_list.append([ee_pose.r.x, ee_pose.r.y, ee_pose.r.z, ee_pose.r.w])
+                self.finger1_idxs=[]
+                self.finger12_idxs=[]
+                self.finger2_idxs=[]
+                self.finger22_idxs=[]
+                self.finger3_idxs=[]
+                self.finger4_idxs=[]  
+                self.finger5_idxs=[]
+                self.body_link3_idxs=[]
+                self.body_link4_idxs=[]
+                self.body_link5_idxs=[]
+                self.body_link6_idxs=[]
 
-            hand_base_idx = self.gym.find_actor_rigid_body_index(env, robot_handle, "hand_base_link", gymapi.DOMAIN_SIM)
-            self.hand_base_idxs.append(hand_base_idx)
-            
-            #get finger pose
-            finger1_idx = self.gym.find_actor_rigid_body_index(env, robot_handle, "thumb_distal", gymapi.DOMAIN_SIM)
-            self.finger1_idxs.append(finger1_idx)
-            finger12_idx = self.gym.find_actor_rigid_body_index(env, robot_handle, "thumb_metacarpals", gymapi.DOMAIN_SIM)
-            self.finger12_idxs.append(finger12_idx)
-            finger2_idx = self.gym.find_actor_rigid_body_index(env, robot_handle, "index_distal", gymapi.DOMAIN_SIM)
-            self.finger2_idxs.append(finger2_idx)
-            finger22_idx = self.gym.find_actor_rigid_body_index(env, robot_handle, "index_proximal", gymapi.DOMAIN_SIM)
-            self.finger22_idxs.append(finger22_idx)
-            finger3_idx = self.gym.find_actor_rigid_body_index(env, robot_handle, "middle_distal", gymapi.DOMAIN_SIM)
-            self.finger3_idxs.append(finger3_idx)
-            finger4_idx = self.gym.find_actor_rigid_body_index(env, robot_handle, "ring_distal", gymapi.DOMAIN_SIM)
-            self.finger4_idxs.append(finger4_idx)
-            finger5_idx = self.gym.find_actor_rigid_body_index(env, robot_handle, "pinky_distal", gymapi.DOMAIN_SIM)
-            self.finger5_idxs.append(finger5_idx)
-            
+                self.init_pos_list=[]
+                self.init_orn_list=[]
+                # Add franka
+                robot_handle = self.gym.create_actor(env, self.robot_asset, pose, "franka", i, 1)
 
-            body_link3_idx = self.gym.find_actor_rigid_body_index(env, robot_handle, "panda_link3", gymapi.DOMAIN_SIM)
-            self.body_link3_idxs.append(body_link3_idx)
-            body_link4_idx = self.gym.find_actor_rigid_body_index(env, robot_handle, "panda_link4", gymapi.DOMAIN_SIM)
-            self.body_link4_idxs.append(body_link4_idx)
-            body_link5_idx = self.gym.find_actor_rigid_body_index(env, robot_handle, "panda_link5", gymapi.DOMAIN_SIM)
-            self.body_link5_idxs.append(body_link5_idx)
-            body_link6_idx = self.gym.find_actor_rigid_body_index(env, robot_handle, "panda_link6", gymapi.DOMAIN_SIM)
-            self.body_link6_idxs.append(body_link6_idx)
+                # Set initial DOF states
+                self.gym.set_actor_dof_states(env, robot_handle, self.default_dof_state, gymapi.STATE_ALL)
 
-            
+                # Set DOF control properties
+                self.gym.set_actor_dof_properties(env, robot_handle, self.robot_dof_props)
 
-            # Get global index of ee in rigid body state tensor
-            ee_idx = self.gym.find_actor_rigid_body_index(env, robot_handle, "hand_base_link", gymapi.DOMAIN_SIM)
-            self.ee_idxs.append(ee_idx)
+                # Get inital ee pose
+                ee_handle = self.gym.find_actor_rigid_body_handle(env, robot_handle, "hand_base_link")
+                self.ee_handles.append(ee_handle)
+                ee_pose = self.gym.get_rigid_transform(env, ee_handle)
+                self.init_pos_list.append([ee_pose.p.x, ee_pose.p.y, ee_pose.p.z])
+                self.init_orn_list.append([ee_pose.r.x, ee_pose.r.y, ee_pose.r.z, ee_pose.r.w])
+
+                hand_base_idx = self.gym.find_actor_rigid_body_index(env, robot_handle, "hand_base_link", gymapi.DOMAIN_SIM)
+                self.hand_base_idxs.append(hand_base_idx)
+                
+                #get finger pose
+                finger1_idx = self.gym.find_actor_rigid_body_index(env, robot_handle, "thumb_distal", gymapi.DOMAIN_SIM)
+                self.finger1_idxs.append(finger1_idx)
+                finger12_idx = self.gym.find_actor_rigid_body_index(env, robot_handle, "thumb_metacarpals", gymapi.DOMAIN_SIM)
+                self.finger12_idxs.append(finger12_idx)
+                finger2_idx = self.gym.find_actor_rigid_body_index(env, robot_handle, "index_distal", gymapi.DOMAIN_SIM)
+                self.finger2_idxs.append(finger2_idx)
+                finger22_idx = self.gym.find_actor_rigid_body_index(env, robot_handle, "index_proximal", gymapi.DOMAIN_SIM)
+                self.finger22_idxs.append(finger22_idx)
+                finger3_idx = self.gym.find_actor_rigid_body_index(env, robot_handle, "middle_distal", gymapi.DOMAIN_SIM)
+                self.finger3_idxs.append(finger3_idx)
+                finger4_idx = self.gym.find_actor_rigid_body_index(env, robot_handle, "ring_distal", gymapi.DOMAIN_SIM)
+                self.finger4_idxs.append(finger4_idx)
+                finger5_idx = self.gym.find_actor_rigid_body_index(env, robot_handle, "pinky_distal", gymapi.DOMAIN_SIM)
+                self.finger5_idxs.append(finger5_idx)
+                
+
+                body_link3_idx = self.gym.find_actor_rigid_body_index(env, robot_handle, "panda_link3", gymapi.DOMAIN_SIM)
+                self.body_link3_idxs.append(body_link3_idx)
+                body_link4_idx = self.gym.find_actor_rigid_body_index(env, robot_handle, "panda_link4", gymapi.DOMAIN_SIM)
+                self.body_link4_idxs.append(body_link4_idx)
+                body_link5_idx = self.gym.find_actor_rigid_body_index(env, robot_handle, "panda_link5", gymapi.DOMAIN_SIM)
+                self.body_link5_idxs.append(body_link5_idx)
+                body_link6_idx = self.gym.find_actor_rigid_body_index(env, robot_handle, "panda_link6", gymapi.DOMAIN_SIM)
+                self.body_link6_idxs.append(body_link6_idx)
+
+                # Get global index of ee in rigid body state tensor
+                ee_idx = self.gym.find_actor_rigid_body_index(env, robot_handle, "hand_base_link", gymapi.DOMAIN_SIM)
+                self.ee_idxs.append(ee_idx)
+
+            elif robot_type == "realman":
+                self.right_gripper_finger1_idxs=[]
+                self.right_gripper_finger2_idxs=[]
+                self.right_ee_idxs=[]
+                self.head_rgb_tensors = []
+                self.right_wrist_rgb_tensors = []
+
+                # Add realman
+                robot_handle = self.gym.create_actor(env, self.robot_asset, pose, "realman", i, 1)
+
+                # Set initial DOF states
+                self.gym.set_actor_dof_states(env, robot_handle, self.default_dof_state, gymapi.STATE_ALL)
+
+                # Set DOF control properties
+                self.gym.set_actor_dof_properties(env, robot_handle, self.robot_dof_props)
+
+                # Get inital ee pose
+                right_ee_idx = self.gym.find_actor_rigid_body_index(env, robot_handle, "hand_base2", gymapi.DOMAIN_SIM)
+                self.right_ee_idxs.append(right_ee_idx)
+                
+                #get finger pose
+                right_gripper_finger1_idx = self.gym.find_actor_rigid_body_index(env, robot_handle, "Left_Support_Link2", gymapi.DOMAIN_SIM)
+                self.right_gripper_finger1_idxs.append(right_gripper_finger1_idx)
+                right_gripper_finger2_idx = self.gym.find_actor_rigid_body_index(env, robot_handle, "Right_Support_Link2", gymapi.DOMAIN_SIM)
+                self.right_gripper_finger2_idxs.append(right_gripper_finger2_idx)
+
+                head_camera_handle = self.gym.create_camera_sensor(env, self.camera_props)
+                head_handle = self.gym.find_actor_rigid_body_index(env, robot_handle, "link_mid_2", gymapi.DOMAIN_SIM)
+                head_camera_pose = gymapi.Transform()
+                head_camera_pose.p = gymapi.Vec3(0.4, -0.05, 0.2)   # 相对link的位置
+                head_camera_pose.r = gymapi.Quat.from_euler_zyx(-0.25, 0.4, 0.2)
+                self.gym.attach_camera_to_body(head_camera_handle, env, head_handle, head_camera_pose, gymapi.FOLLOW_TRANSFORM)
+                head_color_tensor = self.gym.get_camera_image_gpu_tensor(self.sim, env, head_camera_handle, gymapi.IMAGE_COLOR)
+                self.torch_head_color_tensor = gymtorch.wrap_tensor(head_color_tensor)
+                self.head_rgb_tensors.append(self.torch_head_color_tensor)
+
+                right_wrist_camera_handle = self.gym.create_camera_sensor(env, self.camera_props)
+                right_wrist_handle = self.gym.find_actor_rigid_body_index(env, robot_handle, "hand_base2", gymapi.DOMAIN_SIM)
+                right_wrist_camera_pose = gymapi.Transform()
+                right_wrist_camera_pose.p = gymapi.Vec3(0.0, -0.05, 0.05)   # 相对link的位置
+                right_wrist_camera_pose.r = gymapi.Quat.from_euler_zyx(0, -2.07, 1.57)
+                self.gym.attach_camera_to_body(right_wrist_camera_handle, env, right_wrist_handle, right_wrist_camera_pose, gymapi.FOLLOW_TRANSFORM)
+                right_wrist_color_tensor = self.gym.get_camera_image_gpu_tensor(self.sim, env, right_wrist_camera_handle, gymapi.IMAGE_COLOR)
+                self.torch_right_wrist_color_tensor = gymtorch.wrap_tensor(right_wrist_color_tensor)
+                self.right_wrist_rgb_tensors.append(self.torch_right_wrist_color_tensor)
+
 
             if obs_type  == "point_cloud":
                 camera_handle = self.gym.create_camera_sensor(env, self.camera_props)
@@ -308,10 +432,11 @@ class Gym():
         middle_env = self.envs[self.num_envs // 2 + self.num_per_row // 2]
         self.gym.viewer_camera_look_at(self.viewer, middle_env, cam_pos, cam_target)
 
-    def pre_simulate(self,num_envs,asset_root,asset_file,base_pos,base_orn,control_type,obs_type):
+    def pre_simulate(self,num_envs,asset_root,asset_file,base_pos,base_orn,control_type,obs_type,robot_type):
         self.create_plane()
-        self.create_robot_asset(asset_file["frankaLinker"],asset_root)
-        self.create_table_asset()
+        self.create_robot_asset(asset_file["realman"],asset_root)
+        #self.create_table_asset()
+        self.create_racks_aesset(asset_file["racks"],asset_root)
         self.create_box_asset(asset_file["box"],asset_root)
         #self.create_ball_asset(asset_file["ball"],asset_root)
 
@@ -326,10 +451,12 @@ class Gym():
 
         self.obj_target_points = self.sample_points_on_object_surface(num_points=200,box_size=torch.tensor([0.06, 0.04, 0.008], device=self.device))
         self.obj_other_points = self.sample_points_on_object_surface(num_points=10,box_size=torch.tensor([0.06, 0.04, 0.008], device=self.device))
+        
 
-        self.set_dof_states_and_propeties(control_type)
+        self.set_dof_states_and_propeties(robot_type, control_type)
+
         # 创建环境和设置实例
-        self.create_envs_and_actors(num_envs,base_pos,base_orn,obs_type)
+        self.create_envs_and_actors(num_envs,base_pos,base_orn,obs_type,robot_type)
         self.set_camera()
         self.gym.prepare_sim(self.sim)
         self.get_state_tensors()
@@ -355,16 +482,16 @@ class Gym():
         self.dof_pos = self.dof_states[:, 0].view(self.num_envs, -1, 1)
         self.dof_vel = self.dof_states[:, 1].view(self.num_envs, -1, 1)
 
-        self._jacobian = self.gym.acquire_jacobian_tensor(self.sim, "franka")
-        self.jacobian = gymtorch.wrap_tensor(self._jacobian)
+        # self._jacobian = self.gym.acquire_jacobian_tensor(self.sim, "franka")
+        # self.jacobian = gymtorch.wrap_tensor(self._jacobian)
 
         # Jacobian entries for end effector
-        self.ee_index = self.gym.get_asset_rigid_body_dict(self.robot_asset)["hand_base_link"]
-        self.j_eef = self.jacobian[:, self.ee_index - 1, :]
+        # self.ee_index = self.gym.get_asset_rigid_body_dict(self.robot_asset)["hand_base_link"]
+        # self.j_eef = self.jacobian[:, self.ee_index - 1, :]
 
-        # Prepare mass matrix tensor
-        self._massmatrix = self.gym.acquire_mass_matrix_tensor(self.sim, "franka")
-        self.mm = gymtorch.wrap_tensor(self._massmatrix)
+        # # Prepare mass matrix tensor
+        # self._massmatrix = self.gym.acquire_mass_matrix_tensor(self.sim, "franka")
+        # self.mm = gymtorch.wrap_tensor(self._massmatrix)
         self.refresh()
         self.initial_root_states = self.root_states.clone()
         self.initial_dof_states = self.dof_states.clone()
@@ -372,6 +499,7 @@ class Gym():
 
     # 仿真步骤步进一次
     def step(self,u,control_type,obs_type):
+        u = self.build_full_command_with_tendon(u)
         if control_type == "effort" :
             # Set tensor action
             self.gym.set_dof_actuation_force_tensor(self.sim, gymtorch.unwrap_tensor(u))
@@ -382,19 +510,17 @@ class Gym():
         else :
             raise ValueError(f"Unsupported control type: {self.control_type}. Must be one of ['effort', 'velocity', 'position'].")
         # Step the physics
+        
         self.gym.simulate(self.sim)
         self.refresh()
 
-        # d = torch.norm(self.get_dpos(), dim=-1)
-        # print(d)
-        # print("distance:",torch.min(d))
-        # d_min = torch.min(d)
-        # rpos_per_finger_min = torch.exp(1*d_min)
-        # print(rpos_per_finger_min)
-        # rpos_per_finger = torch.exp(1 * d)
-        # print("rpos_per_finger",rpos_per_finger)
-        # reward_pos = torch.min(rpos_per_finger, dim=-1).values
-        # print(reward_pos)
+        self.gym.fetch_results(self.sim, True)
+        self.gym.step_graphics(self.sim)
+        self.gym.render_all_camera_sensors(self.sim)
+        self.gym.start_access_image_tensors(self.sim)
+
+
+        self.gym.end_access_image_tensors(self.sim)
 
 
         if obs_type  == "point_cloud":
@@ -435,6 +561,35 @@ class Gym():
         self.gym.refresh_mass_matrix_tensors(self.sim)
         self.gym.refresh_net_contact_force_tensor(self.sim)
         self.gym.refresh_actor_root_state_tensor(self.sim)
+
+    ########################################### 通用接口 #########################################################
+    # ✅ 获取所有关节角
+    def get_joint_pos(self):
+        joint_pos = self.dof_pos[:, :, 0]
+        return joint_pos
+
+    # ✅ 获取单个关节速度
+    def get_joint_velocity(self, joint_index):
+        return self.dof_vel[:, joint_index, 0]
+
+    # ✅ 获取所有关节速度
+    def get_joint_vel(self):
+        joint_vel = self.dof_vel[:, :, 0]
+        return joint_vel
+
+    # ✅ 设置关节角度
+    def set_joint_angles(self, target_joints):
+        target = torch.tensor(target_joints, dtype=torch.float32, device=self.dof_pos.device)
+        self.gym.set_dof_position_tensor(self.sim, gymtorch.unwrap_tensor(target))
+
+    def set_joint_neutral(self,target_joint):
+        if target_joint != None:
+            self.set_joint_angles(target_joint)
+        else:
+            self.set_joint_angles(self.robot_mids)
+    #############################################################################################################
+
+    ###################################### frankalinker相关接口 ##################################################
 
     def ee_pos_to_torque(self,pos_des,orn_des):
         # 由末端位置控制,由雅可比矩阵等计算出对应的力矩
@@ -503,7 +658,6 @@ class Gym():
         )
         u = torch.clamp(u, lower, upper)
         return u
-
     
     def get_collision_forces(self):
         return self.contact_forces
@@ -530,6 +684,14 @@ class Gym():
         finger2_pos = self.rb_states[self.finger2_idxs, :3]
         center_pos = (finger1_pos + finger2_pos) / 2.0
         return center_pos
+    
+    def get_finger_positions(self): 
+        finger1_pos = self.rb_states[self.finger1_idxs, :3]
+        finger12_pos = self.rb_states[self.finger12_idxs, :3]
+        finger2_pos = self.rb_states[self.finger2_idxs, :3]
+        finger22_pos = self.rb_states[self.finger22_idxs, :3]
+        finger_base_pos = torch.stack([finger1_pos, finger12_pos, finger2_pos, finger22_pos],dim=1)# (Nenv, 4, 3)
+        return finger_base_pos
 
     # ✅ 末端执行器位置
     def get_ee_position(self):
@@ -560,7 +722,7 @@ class Gym():
         return width
 
     def get_hand_to_object_distance(self):
-        hand_base_pos = self.get_hand_base_pos()
+        hand_base_pos = self.get_two_fingers_mid_point()
         box_goal_pos = self.get_obj_position()
         distance = hand_base_pos - box_goal_pos
         return distance
@@ -583,31 +745,74 @@ class Gym():
     def get_body_joint_vel(self):
         body_joints_vel = self.dof_vel[:, :7, 0]
         return body_joints_vel
+    ###########################################################################################################
 
-    # ✅ 获取所有关节角
-    def get_joint_pos(self):
-        joint_pos = self.dof_pos[:, :, 0]
-        return joint_pos
+    ########################################### realman 相关接口 ###############################################
+    def realman_right_arm_joint_to_pos(self, realman_right_arm_displacement, realman_right_arm_joint_pos):
+        u = realman_right_arm_joint_pos + realman_right_arm_displacement
+        lower = torch.as_tensor(
+            self.robot_lower_limits[16:],
+            device=u.device,
+            dtype=u.dtype
+        )
+        upper = torch.as_tensor(
+            self.robot_upper_limits[16:],
+            device=u.device,
+            dtype=u.dtype
+        )
+        u = torch.clamp(u, lower, upper)
+        return u
+    
+    def realman_other_joint_to_pos(self, other_displacement, other_joint_pos):
+        u = other_joint_pos + other_displacement
+        lower = torch.as_tensor(
+            self.robot_lower_limits[:16],
+            device=u.device,
+            dtype=u.dtype
+        )
+        upper = torch.as_tensor(
+            self.robot_upper_limits[:16],
+            device=u.device,
+            dtype=u.dtype
+        )
+        u = torch.clamp(u, lower, upper)
+        return u
+    
+    def get_right_ee_position(self):    
+        right_ee_pos = self.rb_states[self.right_ee_idxs, :3]
+        return right_ee_pos 
+    
+    def get_right_ee_orientation(self):
+        right_ee_orn = self.rb_states[self.right_ee_idxs, 3:7] 
+        return right_ee_orn
+    
+    def get_right_ee_velocity(self):
+        right_ee_vel = self.rb_states[self.right_ee_idxs, 7:10]
+        return right_ee_vel
+    
+    def get_right_ee_angular_velocity(self):
+        right_ee_ang_vel = self.rb_states[self.right_ee_idxs, 10:13] 
+        return right_ee_ang_vel
+    
+    def get_right_gripper_mid_position(self):
+        right_finger1_pos = self.rb_states[self.right_gripper_finger1_idxs, :3]
+        right_finger2_pos = self.rb_states[self.right_gripper_finger2_idxs, :3]
+        mid_position = (right_finger1_pos + right_finger2_pos) / 2.0
+        return mid_position
+    
+    def get_right_gripper_to_object_distance(self):
+        right_gripper_mid_pos = self.get_right_gripper_mid_position()
+        obj_pos = self.get_obj_position()
+        distance = right_gripper_mid_pos - obj_pos
+        return distance
+    
+    def get_gripper_width(self):
+        right_finger1_pos = self.rb_states[self.right_gripper_finger1_idxs, :3]
+        right_finger2_pos = self.rb_states[self.right_gripper_finger2_idxs, :3]
+        width = torch.norm(right_finger1_pos - right_finger2_pos, dim=-1)
+        return width
 
-    # ✅ 获取单个关节速度
-    def get_joint_velocity(self, joint_index):
-        return self.dof_vel[:, joint_index, 0]
-
-    # ✅ 获取所有关节速度
-    def get_joint_vel(self):
-        joint_vel = self.dof_vel[:, :, 0]
-        return joint_vel
-
-    # ✅ 设置关节角度
-    def set_joint_angles(self, target_joints):
-        target = torch.tensor(target_joints, dtype=torch.float32, device=self.dof_pos.device)
-        self.gym.set_dof_position_tensor(self.sim, gymtorch.unwrap_tensor(target))
-
-    def set_joint_neutral(self,target_joint):
-        if target_joint != None:
-            self.set_joint_angles(target_joint)
-        else:
-            self.set_joint_angles(self.robot_mids)
+    ###########################################################################################################
 
     # ✅ 设置底座位姿
     def set_actor_pose(self, name, pos, orn,env_ids):
@@ -625,10 +830,11 @@ class Gym():
 
     def set_random_box_pose(self):
         box_pose = gymapi.Transform()
-        x = random.uniform(0.5, 0.6)
+        #x = random.uniform(0.7, 0.9)
+        x = 0.8
         y = random.uniform(-0.05, 0.05)
         # z = 0.325
-        z = random.uniform(0.325, 0.4)
+        z = 1
         box_pose.p = gymapi.Vec3(x, y, z)
         box_pose.r = gymapi.Quat(0, 0, 0, 1)
         return box_pose
@@ -677,7 +883,7 @@ class Gym():
     #物体重置条件
     def get_object_reset_info(self):
         reset_all = []
-        for i in range(6):
+        for i in range(self.box_num):
             box_pos_z = self.rb_states[self.box_idxs[i], 2]
             table_pos_z = 0.3
             reset_all.append(box_pos_z < table_pos_z)
@@ -732,7 +938,7 @@ class Gym():
             return
 
         for env_idx in env_ids.tolist():
-            for box_id in range(6):
+            for box_id in range(self.box_num):
                 reset_obj_idxs = self.root_box_idxs[box_id][env_idx]   # ✅ 关键一步
 
                 self.root_states[reset_obj_idxs, 0:3] = self.initial_root_states[reset_obj_idxs, 0:3]
@@ -779,17 +985,23 @@ class Gym():
             else:
                 self.gym.poll_viewer_events(self.viewer)
 
-    def check_reset_events(self):
+    def check_reset_events(self, robot_type):
         reset_events = {}
 
-        finger_info = self.get_finger_collision_info()
-        reset_events['finger_collision'] = finger_info['collision_flags']
+        if robot_type == "franka":
 
-        body_info = self.get_body_collision_info()
-        reset_events['body_collision'] = body_info['collision_flags']
+            finger_info = self.get_finger_collision_info()
+            reset_events['finger_collision'] = finger_info['collision_flags']
 
-        obj_info = self.get_object_reset_info()
-        reset_events['obj_reset'] = obj_info['reset_obj']
+            body_info = self.get_body_collision_info()
+            reset_events['body_collision'] = body_info['collision_flags']
+
+            obj_info = self.get_object_reset_info()
+            reset_events['obj_reset'] = obj_info['reset_obj']
+
+        elif robot_type == "realman":
+            obj_info = self.get_object_reset_info()
+            reset_events['obj_reset'] = obj_info['reset_obj']
 
         return reset_events
 
@@ -818,6 +1030,14 @@ class Gym():
         x_world = quat_rotate(quat, x_local)
 
         return x_world
+    
+    def get_head_image(self):
+        head_image = self.head_rgb_tensors
+        return head_image
+    
+    def get_right_wrist_image(self):
+        right_wrist_image = self.right_wrist_rgb_tensors
+        return right_wrist_image
     
     def sample_points_on_object_surface(self, num_points, box_size):
         ##仅针对立方体物体，后续需要修改为适应更多物体
@@ -863,7 +1083,7 @@ class Gym():
     def get_points_on_object_surface(self):
         target_points_world = None
         other_points_world = []
-        for box_id in range(6):
+        for box_id in range(self.box_num):
             box_pos = self.root_states[self.root_box_idxs[box_id], 0:3]
             box_quat = self.root_states[self.root_box_idxs[box_id], 3:7]
             box_points_local = self.obj_target_points if box_id == 0 else self.obj_other_points
@@ -878,13 +1098,6 @@ class Gym():
         other_points_world = torch.cat(other_points_world, dim=1) # (Nenv, 10*5, 3)
         return target_points_world, other_points_world
     
-    def get_finger_positions(self): 
-        finger1_pos = self.rb_states[self.finger1_idxs, :3]
-        finger12_pos = self.rb_states[self.finger12_idxs, :3]
-        finger2_pos = self.rb_states[self.finger2_idxs, :3]
-        finger22_pos = self.rb_states[self.finger22_idxs, :3]
-        finger_base_pos = torch.stack([finger1_pos, finger12_pos, finger2_pos, finger22_pos],dim=1)# (Nenv, 4, 3)
-        return finger_base_pos
     
     def get_dpos(self):
         finger_base_pos = self.get_finger_positions() # (Nenv, 4, 3)
@@ -913,7 +1126,7 @@ class Gym():
         #print(torch.unique(seg_flat))
         depth_flat = depth_tensor.view(-1)
 
-        for box_id in range(6):
+        for box_id in range(self.box_num):
             actor_id = self.root_box_idxs[box_id][env_id]
             actor_id = actor_id - 8 * env_id
             #print(f"Segmenting depth for Box ID {box_id} with Actor ID {actor_id} in Env ID {env_id}")
@@ -950,7 +1163,7 @@ class Gym():
         obj_points_cloud = {}
         for env_id in range(self.num_envs):
             seg_depth = self.segment_depth_image(self.depth_tensors[env_id], self.seg_tensors[env_id], env_id)
-            for box_id in range(6):
+            for box_id in range(self.box_num):
                 obj_depth_tensor = seg_depth[box_id]
                 obj_points = obj_depth_image_to_point_cloud_GPU(obj_depth_tensor, self.camera_view_matrixs[env_id], self.camera_proj_matrixs[env_id], self.camera_u2, self.camera_v2, float(self.camera_props.width), float(self.camera_props.height), 2.0, self.device)
                 # mask = obj_points[:,2]<0.8
@@ -962,7 +1175,84 @@ class Gym():
                 #print(obj_points_local)
         return obj_points_cloud
 
+    def compute_slave_targets(self, master_pos):
+        """
+        根据master位置计算从动关节目标位置
+        
+        Args:
+            master_pos: (num_envs, 1) 或 (num_envs,) master关节目标位置
+        
+        Returns:
+            slave_targets: (num_envs, 6) 从动关节目标位置
+        """
+        self.gripper_slaves = [
+            (24, -1.0, "Left_Support_Joint2"),
+            (25, 1.0, "Left_2_Joint2"),
+            (26, -1.0, "Right_1_Joint2"),
+            (27, -1.0,"Right_Support_Joint2"),
+            (28, -1.0, "Right_2_Joint2"),
+        ]
+        
+        # 提取索引和系数
+        self.slave_indices = [idx for idx, _, _ in self.gripper_slaves]  # [24, 25, 26, 27, 28]
+        self.slave_coeffs = torch.tensor(
+
+            
+            [coef for _, coef, _ in self.gripper_slaves],
+            device=self.device
+        ).unsqueeze(0)  # (1, 5)
+
+        # 确保维度正确
+
+        if master_pos.dim() == 1:
+            master_pos = master_pos.unsqueeze(1)  # (num_envs, 1)
+        
+        # 广播: (num_envs, 1) * (1, 6) -> (num_envs, 6)
+        slave_targets = master_pos * self.slave_coeffs
+        
+        return slave_targets
+
+    def build_full_command_with_tendon(self, u):
+        """
+        处理 29 维输入，覆盖 24-28 为 tendon 同步值
+        
+        Args:
+            u: (num_envs, 29) 网络输出，包含 0-28 所有关节
+                    其中 u[:, 24:29] 会被 tendon 逻辑覆盖
+        
+        Returns:
+            u_full: (num_envs, 29) 完整的 DOF 控制目标，24-28 已同步
+        """
+        self.gripper_master_idx = 23
+        # 检查输入维度
+        if u.shape[1] != self.robot_num_dofs:
+            raise ValueError(f"Expected {self.robot_num_dofs} DOFs, got {u.shape[1]}")
+        
+        # 直接复制输入（然后覆盖从动关节）
+        u_full = u.clone()
+        
+        # 获取 master 关节目标位置（使用网络输出的 23 关节值）
+        master_target = u[:, self.gripper_master_idx]  # (num_envs,)
+        
+        # 计算从动关节目标（5 个关节）
+        slave_targets = self.compute_slave_targets(master_target)  # (num_envs, 5)
+        
+        # 覆盖 24-28 关节的值（tendon 同步）
+        for i, (slave_idx, _, _) in enumerate(self.gripper_slaves):
+            u_full[:, slave_idx] = slave_targets[:, i]
+        
+        return u_full
+
     ##############################     visualize_API    ###################################
+    def visualize_rgb(self, rgb_tensor):
+        rgb = rgb_tensor.detach()
+        rgb = rgb[..., :3]
+        rgb = rgb.cpu().numpy()
+        import matplotlib.pyplot as plt
+        plt.imshow(rgb)
+        plt.axis('off')
+        plt.pause(1e-6)
+
     def visualize_depth(self, depth_tensor):
         depth = depth_tensor
         depth = -depth

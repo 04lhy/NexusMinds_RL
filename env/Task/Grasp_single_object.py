@@ -9,6 +9,7 @@ class Grasp_single_object(Task):
         super().__init__(sim)
         self.sim = sim
         self.reward_type = cfg.reward_type
+        self.robot_type = cfg.robot_type
         self.distance_threshold = cfg.distance_threshold
         self.device = cfg.device
         self.num_envs = cfg.num_envs
@@ -145,7 +146,7 @@ class Grasp_single_object(Task):
         return -self.body_collision_reset * body_reset
 
     def reward_obj_reset(self):
-        reset_events = self.sim.check_reset_events()
+        reset_events = self.sim.check_reset_events(self.robot_type)
         obj_reset = reset_events['obj_reset'].float()
 
         return -self.obj_reset * obj_reset

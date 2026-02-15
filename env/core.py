@@ -241,9 +241,9 @@ class RobotTaskEnv():
         # 后续根据碰撞进行修改，或者是其他的逻辑判断
         self.reset_buf = 0
 
-        reset_events = self.sim.check_reset_events()
-        finger_collision_termination = reset_events['finger_collision']
-        body_collision_termination = reset_events['body_collision']
+        reset_events = self.sim.check_reset_events(self.cfg.all.robot_type_sim)
+        # finger_collision_termination = reset_events['finger_collision']
+        # body_collision_termination = reset_events['body_collision']
         object_reset_termination = reset_events['obj_reset']
         
         task_success = self.task.is_success()
@@ -253,7 +253,7 @@ class RobotTaskEnv():
 
         # 碰撞逻辑，后面修改
         # self.reset_buf = self.time_out_buf | collision_termination | task_success
-        self.reset_buf = self.time_out_buf |  task_success | finger_collision_termination | body_collision_termination | object_reset_termination
+        self.reset_buf = self.time_out_buf |  task_success  | object_reset_termination #| finger_collision_termination | body_collision_termination
 
 
 

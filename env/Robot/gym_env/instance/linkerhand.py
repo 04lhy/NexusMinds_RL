@@ -25,7 +25,7 @@ class LinkerHand06(Robot):
                 self.kv[i] = self.cfg.damping[dof_name]
 
         # 准备资产，创建环境，为后续的控制做好准备
-        self.sim.pre_simulate(cfg.num_envs, cfg.asset, cfg.urdf_files_dict, cfg.base_pose, cfg.base_orn, cfg.control_type, cfg.obs_type)
+        self.sim.pre_simulate(cfg.num_envs, cfg.asset, cfg.urdf_files_dict, cfg.base_pose, cfg.base_orn, cfg.control_type, cfg.obs_type, cfg.robot_type)
 
     def step(self, action) -> None:
         action = action.clone()  # ensure action don't change
@@ -89,7 +89,7 @@ class LinkerHand06(Robot):
         ee_velocity = self.sim.get_ee_velocity()
         ee_angular_velocity = self.sim.get_ee_angular_velocity()
         middle_point_to_object_distance = self.sim.get_hand_to_object_distance()
-        middle_point = self.sim.get_hand_base_pos()
+        middle_point = self.sim.get_two_fingers_mid_point()
         obj_pos = self.sim.get_obj_position()
         obj_quat = self.sim.get_obj_quaternion() 
         dpos = self.sim.get_dpos().flatten(1)
