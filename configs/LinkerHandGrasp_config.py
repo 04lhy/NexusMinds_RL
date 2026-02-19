@@ -8,7 +8,7 @@ args = gymutil.parse_arguments(
         {"name": "--use_gpu_pipeline", "type": bool, "default": False, "help": "Use GPU pipeline"},
         {"name": "--headless", "type": bool, "default": False, "help": "Run simulation without viewer"},
         {"name": "--logdir", "type": str, "default": "logs", "help": "Directory for logging"},
-        {"name": "--num_envs", "type":int, "default":1, "help": "the number of environments to train"},
+        {"name": "--num_envs", "type":int, "default":2048, "help": "the number of environments to train"},
     ]   
 )
 
@@ -170,7 +170,8 @@ class TaskCfg:
             # "hand_down": self.c10,
             # #"success":self.c11,
             # "hand_align":self.c12
-            "penalty_rnegtive": self.c13
+            #"penalty_rnegtive": self.c13
+            "gripper_collision_reset": self.c7
         }
 
 

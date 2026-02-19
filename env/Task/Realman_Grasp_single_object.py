@@ -22,7 +22,7 @@ class Realman_Grasp_single_object(Task):
         self.grasp_goal_distance = cfg.reward_scales["grasp_goal_distance"]
         self.grasp_mid_point = cfg.reward_scales["grasp_mid_point"]
         self.pos_reach_distance = cfg.reward_scales["pos_reach_distance"]
-        # self.finger_collision_reset = cfg.reward_scales["finger_collision_reset"]
+        self.gripper_collision_reset = cfg.reward_scales["gripper_collision_reset"]
         # self.body_collision_reset = cfg.reward_scales["body_collision_reset"]
         self.obj_reset = cfg.reward_scales["obj_reset"]
         # self.hand_down = cfg.reward_scales["hand_down"]
@@ -133,11 +133,11 @@ class Realman_Grasp_single_object(Task):
     #     reward = mask * torch.exp(-self.alpha_align * (1.0 + align))
     #     return self.hand_align * reward
 
-    # def reward_finger_collision_reset(self):
-    #     reset_events = self.sim.check_reset_events()
-    #     finger_reset = reset_events['finger_collision'].float()
+    def reward_gripper_collision_reset(self):
+        reset_events = self.sim.check_reset_events(self.robot_type)
+        finger_reset = reset_events['gripper_collision'].float()
 
-    #     return -self.finger_collision_reset * finger_reset
+        return -self.gripper_collision_reset * finger_reset
 
     # def reward_body_collision_reset(self):
     #     reset_events = self.sim.check_reset_events()

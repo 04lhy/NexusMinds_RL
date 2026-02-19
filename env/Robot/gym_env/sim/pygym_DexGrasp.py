@@ -93,18 +93,6 @@ class Gym():
             sp.restitution = 0.0           # 弹性（反弹）
         self.gym.set_asset_rigid_shape_properties(self.robot_asset, shape_props)
 
-        # tendon_props = gymapi.TendonProperties()
-        # tendon_props.stiffness = 1000
-        # tendon_props.damping = 50
-        # tendon = self.gym.create_asset_fixed_tendon(self.robot_asset, tendon_props)
-
-        # self.gym.add_asset_tendon_joint(self.robot_asset, tendon, self.dof_dict["Left_1_Joint"], 1.0)
-        # self.gym.add_asset_tendon_joint(self.robot_asset, tendon, self.dof_dict["Left_2_Joint"], 1.0)
-        # self.gym.add_asset_tendon_joint(self.robot_asset, tendon, self.dof_dict["Left_Support_Joint"], 1.0)
-        # self.gym.add_asset_tendon_joint(self.robot_asset, tendon, self.dof_dict["Right_1_Joint"], -1.0)
-        # self.gym.add_asset_tendon_joint(self.robot_asset, tendon, self.dof_dict["Right_2_Joint"], -1.0)
-        # self.gym.add_asset_tendon_joint(self.robot_asset, tendon, self.dof_dict["Right_Support_Joint"], -1.0)
-
     def create_table_asset(self):
         # 创建模板
         table_dims = gymapi.Vec3(1, 1, 0.3)
@@ -134,10 +122,10 @@ class Gym():
         self.box_asset = self.gym.load_asset(self.sim, asset_root, urdf_file, asset_options)
         shape_props = self.gym.get_asset_rigid_shape_properties(self.box_asset)
         for sp in shape_props:
-            sp.friction = 0.5           # 动摩擦系数
-            sp.rolling_friction = 0.0      # 滚动摩擦
-            sp.torsion_friction = 0.0      # 扭转摩擦
-            # sp.restitution = 0.0           # 弹性（反弹）
+            sp.friction = 0.6           # 动摩擦系数
+            sp.rolling_friction = 0.01      # 滚动摩擦
+            sp.torsion_friction = 0.01      # 扭转摩擦
+            sp.restitution = 0.1           # 弹性（反弹）
         self.gym.set_asset_rigid_shape_properties(self.box_asset, shape_props)
 
     #后面接入参数，设置pd参数等等
@@ -230,6 +218,7 @@ class Gym():
 
         self.racks_handles=[]
         self.racks_idxs=[]
+        self.taizi_idxs=[]
 
         self.box_num = 1
         self.box_handles=[]
@@ -237,7 +226,35 @@ class Gym():
         #现在结构 root_box_idxs[box_id][env_id] 后续使用时需要注意一下
         self.root_box_idxs = {j: [] for j in range(self.box_num)}
 
+        #franka
+        self.ee_handles=[]
+        self.ee_idxs=[]
 
+        self.hand_base_idxs=[]
+
+        self.finger1_idxs=[]
+        self.finger12_idxs=[]
+        self.finger2_idxs=[]
+        self.finger22_idxs=[]
+        self.finger3_idxs=[]
+        self.finger4_idxs=[]  
+        self.finger5_idxs=[]
+        self.body_link3_idxs=[]
+        self.body_link4_idxs=[]
+        self.body_link5_idxs=[]
+        self.body_link6_idxs=[]
+
+        self.init_pos_list=[]
+        self.init_orn_list=[]
+
+        #realman
+        self.right_gripper_finger1_idxs=[]
+        self.right_gripper_finger2_idxs=[]
+        self.right_ee_idxs=[]
+        self.head_rgb_tensors = []
+        self.right_wrist_rgb_tensors = []
+
+        #camera
         self.cameras = []
         self.depth_tensors = []
         self.seg_tensors = []
@@ -271,13 +288,15 @@ class Gym():
 
             racks_handle = self.gym.create_actor(env, self.racks_asset, racks_pose, "racks", i, 1)
             self.racks_handles.append(racks_handle)
+            taizi_idx = self.gym.find_actor_rigid_body_index(env, racks_handle, "taizi", gymapi.DOMAIN_SIM)
+            self.taizi_idxs.append(taizi_idx)
             # racks_idx = self.gym.find_actor_rigid_body_index(env, racks_handle, "base_link", gymapi.DOMAIN_SIM)
             # self.racks_idxs.append(racks_idx)
             
             for j in range(self.box_num):
                 box_pose = self.set_random_box_pose()
                 box_handle = self.gym.create_actor(env, self.box_asset, box_pose, f"box_{j}", i, 0, j+1)
-                red_color = gymapi.Vec3(1.0, 0.0, 0.0)  
+                red_color = gymapi.Vec3(0.0, 0.2, 0.6)  
                 self.gym.set_rigid_body_color(env, box_handle, 0, gymapi.MESH_VISUAL_AND_COLLISION, red_color)
                 self.box_handles.append(box_handle)
                 box_idx = self.gym.get_actor_rigid_body_index(env, box_handle, 0, gymapi.DOMAIN_SIM)
@@ -287,25 +306,6 @@ class Gym():
 
 
             if robot_type == "frankaLinker":
-                self.ee_handles=[]
-                self.ee_idxs=[]
-
-                self.hand_base_idxs=[]
-
-                self.finger1_idxs=[]
-                self.finger12_idxs=[]
-                self.finger2_idxs=[]
-                self.finger22_idxs=[]
-                self.finger3_idxs=[]
-                self.finger4_idxs=[]  
-                self.finger5_idxs=[]
-                self.body_link3_idxs=[]
-                self.body_link4_idxs=[]
-                self.body_link5_idxs=[]
-                self.body_link6_idxs=[]
-
-                self.init_pos_list=[]
-                self.init_orn_list=[]
                 # Add franka
                 robot_handle = self.gym.create_actor(env, self.robot_asset, pose, "franka", i, 1)
 
@@ -356,12 +356,6 @@ class Gym():
                 self.ee_idxs.append(ee_idx)
 
             elif robot_type == "realman":
-                self.right_gripper_finger1_idxs=[]
-                self.right_gripper_finger2_idxs=[]
-                self.right_ee_idxs=[]
-                self.head_rgb_tensors = []
-                self.right_wrist_rgb_tensors = []
-
                 # Add realman
                 robot_handle = self.gym.create_actor(env, self.robot_asset, pose, "realman", i, 1)
 
@@ -499,7 +493,6 @@ class Gym():
 
     # 仿真步骤步进一次
     def step(self,u,control_type,obs_type):
-        u = self.build_full_command_with_tendon(u)
         if control_type == "effort" :
             # Set tensor action
             self.gym.set_dof_actuation_force_tensor(self.sim, gymtorch.unwrap_tensor(u))
@@ -836,7 +829,15 @@ class Gym():
         # z = 0.325
         z = 1
         box_pose.p = gymapi.Vec3(x, y, z)
-        box_pose.r = gymapi.Quat(0, 0, 0, 1)
+        yaw = random.uniform(-math.pi, math.pi)
+
+        half_yaw = yaw * 0.5
+        qz = math.sin(half_yaw)
+        qw = math.cos(half_yaw)
+
+        # 绕世界 Z 轴旋转
+        box_pose.r = gymapi.Quat(0.0, 0.0, qz, qw)
+
         return box_pose
 
     def get_obj_position(self):
@@ -846,6 +847,34 @@ class Gym():
     def get_obj_quaternion(self):
         box_goal_quat = self.root_states[self.root_box_idxs[0], 3:7]
         return box_goal_quat
+    
+    
+    def get_gripper_collision_info(self):
+        n = torch.tensor([-17.0, 0.0, 54.0], device=self.device)
+        n = n / torch.norm(n)
+
+        vel = self.root_states[self.root_box_idxs[0], 7:10]
+        speed = torch.norm(vel, dim=-1)
+        stable = speed < 0.01
+
+        obj_pos = self.get_obj_position()
+        plane_point = obj_pos - 0.025 * n 
+
+        left_pos = self.rb_states[self.right_gripper_finger1_idxs, :3]
+        right_pos = self.rb_states[self.right_gripper_finger2_idxs, :3]
+
+        d_left  = torch.sum(n * (left_pos  - plane_point), dim=1)
+        d_right = torch.sum(n * (right_pos - plane_point), dim=1)
+
+        collision_left = (d_left < 0.005) & stable
+        collision_right = (d_right < 0.005) & stable
+
+        collision = collision_left | collision_right
+        return {
+            'collision_flags': collision
+        }
+
+
     
     def get_finger_collision_info(self):
         finger1_pos_z = self.rb_states[self.finger1_idxs, 2]
@@ -1002,6 +1031,9 @@ class Gym():
         elif robot_type == "realman":
             obj_info = self.get_object_reset_info()
             reset_events['obj_reset'] = obj_info['reset_obj']
+
+            gripper_info = self.get_gripper_collision_info()
+            reset_events['gripper_collision'] = gripper_info['collision_flags']
 
         return reset_events
 

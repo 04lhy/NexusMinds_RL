@@ -73,6 +73,7 @@ class Realman(Robot):
 
 
             u = torch.cat([u2, u1], dim=1)
+            u = self.sim.build_full_command_with_tendon(u)
             
             return u
 
