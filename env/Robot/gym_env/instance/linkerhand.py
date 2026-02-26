@@ -90,8 +90,8 @@ class LinkerHand06(Robot):
         ee_angular_velocity = self.sim.get_ee_angular_velocity()
         middle_point_to_object_distance = self.sim.get_hand_to_object_distance()
         middle_point = self.sim.get_two_fingers_mid_point()
-        obj_pos = self.sim.get_obj_position()
-        obj_quat = self.sim.get_obj_quaternion() 
+        obj_pos = self.sim.get_top_obj_position()
+        obj_quat = self.sim.get_top_obj_quaternion() 
         dpos = self.sim.get_dpos().flatten(1)
         dneg = self.sim.get_dneg().flatten(1)
 

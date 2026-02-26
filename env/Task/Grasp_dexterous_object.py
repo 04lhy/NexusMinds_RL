@@ -29,6 +29,7 @@ class Grasp_dexterous_object(Task):
         self.hand_down = cfg.reward_scales["hand_down"]
         self.hand_align = cfg.reward_scales["hand_align"]
         self.penalty_rnegtive = cfg.reward_scales["penalty_rnegtive"]
+        self.grasp_untarget_reset = cfg.reward_scales["grasp_untarget_reset"]
         #self.success = cfg.reward_scales["success"]
         
         # self.finger_z_distance = cfg.reward_scales["finger_z_distance"]
@@ -40,13 +41,13 @@ class Grasp_dexterous_object(Task):
 
         """返回任务观测，可自行扩展"""
         # 这个地方应该是要返回Object pose（position + quaternion）
-        obj_pos_and_quat = torch.cat([self.sim.get_obj_position(), self.sim.get_obj_quaternion()], dim=1)
+        obj_pos_and_quat = torch.cat([self.sim.get_top_obj_position(), self.sim.get_top_obj_quaternion()], dim=1)
         return obj_pos_and_quat
 
     def get_achieved_goal(self) -> torch.Tensor:
 
         """获得当前物体的"""
-        get_achieved_goal= self.sim.get_obj_position()
+        get_achieved_goal= self.sim.get_top_obj_position()
         return get_achieved_goal
 
     def reset_ids(self, env_ids: torch.Tensor) -> torch.Tensor:
@@ -85,7 +86,7 @@ class Grasp_dexterous_object(Task):
         # return penalty_rneg
         return rneg
     
-    def reward_penatly_rnegtive(self):
+    def reward_penalty_rnegtive(self):
         penalty = self.penalty_rneg()
 
         return -self.penalty_rnegtive * penalty
@@ -107,7 +108,7 @@ class Grasp_dexterous_object(Task):
         # penalty = self.penalty_rneg()
 
         two_fingers_mid = self.sim.get_two_fingers_mid_point()
-        d_mid = two_fingers_mid - self.sim.get_obj_position()
+        d_mid = two_fingers_mid - self.sim.get_top_obj_position()
 
         dist = torch.norm(d_mid, dim=-1)  # [N]
         r_neg = torch.exp(-self.alpha_mid * dist)  # exp(-α_neg * d_neg_min)
@@ -168,13 +169,13 @@ class Grasp_dexterous_object(Task):
         return self.hand_align * reward
 
     def reward_finger_collision_reset(self):
-        reset_events = self.sim.check_reset_events()
+        reset_events = self.sim.check_reset_events(self.robot_type)
         finger_reset = reset_events['finger_collision'].float()
 
         return -self.finger_collision_reset * finger_reset
 
     def reward_body_collision_reset(self):
-        reset_events = self.sim.check_reset_events()
+        reset_events = self.sim.check_reset_events(self.robot_type)
         body_reset = reset_events['body_collision'].float()
 
         return -self.body_collision_reset * body_reset
@@ -184,6 +185,12 @@ class Grasp_dexterous_object(Task):
         obj_reset = reset_events['obj_reset'].float()
 
         return -self.obj_reset * obj_reset
+    
+    def reward_grasp_untarget_reset(self):
+        reset_events = self.sim.check_reset_events(self.robot_type)
+        grasp_untarget_reset = reset_events['grasp_untarget'].float()
+
+        return -self.grasp_untarget_reset * grasp_untarget_reset
     
     # def reward_success(self):
     #     success = self.is_success()

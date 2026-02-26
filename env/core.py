@@ -241,22 +241,26 @@ class RobotTaskEnv():
         # 后续根据碰撞进行修改，或者是其他的逻辑判断
         self.reset_buf = 0
 
-        reset_events = self.sim.check_reset_events(self.cfg.all.robot_type_sim)
-        # finger_collision_termination = reset_events['finger_collision']
-        # body_collision_termination = reset_events['body_collision']
-        object_reset_termination = reset_events['obj_reset']
-        gripper_collision_termination = reset_events['gripper_collision']
-        
         task_success = self.task.is_success()
 
         self.time_out_buf = self.episode_length_buf > self.max_episode_length # no terminal reward for time-outs
 
+        robot_type = self.cfg.all.robot_type_sim
 
-        # 碰撞逻辑，后面修改
-        # self.reset_buf = self.time_out_buf | collision_termination | task_success
-        self.reset_buf = self.time_out_buf |  task_success  | object_reset_termination | gripper_collision_termination #| finger_collision_termination | body_collision_termination
+        if robot_type == "frankaLinker":
+            reset_events = self.sim.check_reset_events(robot_type)
+            finger_collision_termination = reset_events['finger_collision']
+            body_collision_termination = reset_events['body_collision']
+            object_reset_termination = reset_events['obj_reset']
+            grasp_untarget_termination = reset_events['grasp_untarget']
+            self.reset_buf = self.time_out_buf |  task_success  | object_reset_termination | finger_collision_termination | body_collision_termination | grasp_untarget_termination
 
-
+        elif robot_type == "realman":
+            reset_events = self.sim.check_reset_events(robot_type)
+            object_reset_termination = reset_events['obj_reset']
+            gripper_collision_termination = reset_events['gripper_collision']
+            self.reset_buf = self.time_out_buf |  task_success  | object_reset_termination | gripper_collision_termination
+    
 
     
     def compute_reward(self):

@@ -4,18 +4,21 @@
     <visual>
       <origin xyz="0 0 0"/>
       <geometry>
-        <box size="0.234 0.046 0.05"/>
+        <box size="0.06 0.04 0.008"/>
       </geometry>
     </visual>
     <collision>
       <origin xyz="0 0 0"/>
       <geometry>
-        <box size="0.234 0.046 0.05"/>
+        <box size="0.06 0.04 0.008"/>
       </geometry>
     </collision>
-     <inertial>
-      <mass value="0.116"/>
-      <inertia ixx="0.000045" ixy="0.0" ixz="0.0" iyy="0.0006" iyz="0.0" izz="0.0006"/>
+    <inertial>
+      <mass value="0.1"/>
+      <!-- 按实际尺寸计算惯性矩阵 -->
+      <inertia ixx="0.0000137" ixy="0.0" ixz="0.0" 
+               iyy="0.0000253" iyz="0.0" 
+               izz="0.0000383"/>
     </inertial>
   </link>
 </robot>

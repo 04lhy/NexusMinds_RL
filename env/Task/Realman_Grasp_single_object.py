@@ -38,13 +38,13 @@ class Realman_Grasp_single_object(Task):
 
         """返回任务观测，可自行扩展"""
         # 这个地方应该是要返回Object pose（position + quaternion）
-        obj_pos_and_quat = torch.cat([self.sim.get_obj_position(), self.sim.get_obj_quaternion()], dim=1)
+        obj_pos_and_quat = torch.cat([self.sim.get_top_obj_position(), self.sim.get_top_obj_quaternion()], dim=1)
         return obj_pos_and_quat
 
     def get_achieved_goal(self) -> torch.Tensor:
 
         """获得当前物体的"""
-        get_achieved_goal= self.sim.get_obj_position()
+        get_achieved_goal= self.sim.get_top_obj_position()
         return get_achieved_goal
 
     def reset_ids(self, env_ids: torch.Tensor) -> torch.Tensor:
@@ -84,7 +84,7 @@ class Realman_Grasp_single_object(Task):
 
     def reward_grasp_mid_point(self):
         two_fingers_mid = self.sim.get_right_gripper_mid_position()
-        d_mid = two_fingers_mid - self.sim.get_obj_position()
+        d_mid = two_fingers_mid - self.sim.get_top_obj_position()
 
         dist = torch.norm(d_mid, dim=-1)  # [N]
         r_neg = torch.exp(-self.alpha_mid * dist)  # exp(-α_neg * d_neg_min)
@@ -95,7 +95,7 @@ class Realman_Grasp_single_object(Task):
 
         hand_base_pos = self.sim.get_right_ee_position()
 
-        d = torch.norm(hand_base_pos - self.sim.get_obj_position(), dim=-1)
+        d = torch.norm(hand_base_pos - self.sim.get_top_obj_position(), dim=-1)
 
         reward_pos = torch.exp(-self.alpha_pos * d)
 

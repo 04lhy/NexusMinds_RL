@@ -1,0 +1,21 @@
+<?xml version="1.0"?>
+<robot name="object">
+  <link name="object">
+    <visual>
+      <origin xyz="0 0 0"/>
+      <geometry>
+        <box size="0.234 0.046 0.05"/>
+      </geometry>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0"/>
+      <geometry>
+        <box size="0.234 0.046 0.05"/>
+      </geometry>
+    </collision>
+     <inertial>
+      <mass value="0.116"/>
+      <inertia ixx="0.000045" ixy="0.0" ixz="0.0" iyy="0.0006" iyz="0.0" izz="0.0006"/>
+    </inertial>
+  </link>
+</robot>

@@ -118,6 +118,8 @@ class Gym():
         asset_options = gymapi.AssetOptions()
         asset_options.fix_base_link = False
         asset_options.thickness = 0.001
+        asset_options.linear_damping = 0.5
+        asset_options.angular_damping = 0.5
         # self.box_asset = self.gym.create_box(self.sim, box_size, box_size, box_size, asset_options)
         self.box_asset = self.gym.load_asset(self.sim, asset_root, urdf_file, asset_options)
         shape_props = self.gym.get_asset_rigid_shape_properties(self.box_asset)
@@ -205,13 +207,12 @@ class Gym():
         pose.p =gymapi.Vec3(base_pos[0],base_pos[1],base_pos[2])
         pose.r=gymapi.Quat(base_orn[0],base_orn[1],base_orn[2],base_orn[3])
 
-        # table_pose = gymapi.Transform()
-        # table_pose.p = gymapi.Vec3(0.7, 0.0, 0.15)
+        table_pose = gymapi.Transform()
+        table_pose.p = gymapi.Vec3(0.7, 0.0, 0.15)
 
         racks_pose = gymapi.Transform()
         racks_pose.p = gymapi.Vec3(2.7, -0.55, 0)
         racks_pose.r = gymapi.Quat(0, 0, -0.7071, 0.7071)
-
 
         self.num_envs=num_envs
         self.envs=[]
@@ -220,11 +221,12 @@ class Gym():
         self.racks_idxs=[]
         self.taizi_idxs=[]
 
-        self.box_num = 1
+        self.box_num = 6
         self.box_handles=[]
-        self.box_idxs = {j: [] for j in range(self.box_num)}
+        self.box_idxs = torch.zeros((num_envs, self.box_num),dtype=torch.long,device=self.device)
         #现在结构 root_box_idxs[box_id][env_id] 后续使用时需要注意一下
-        self.root_box_idxs = {j: [] for j in range(self.box_num)}
+        self.root_box_idxs = torch.zeros((num_envs, self.box_num),dtype=torch.long,device=self.device)
+
 
         #franka
         self.ee_handles=[]
@@ -283,15 +285,6 @@ class Gym():
             # Create env
             env = self.gym.create_env(self.sim, env_lower, env_upper, self.num_per_row)
             self.envs.append(env)
-
-            #table_handle = self.gym.create_actor(env, self.table_asset, table_pose, "table", i, 1)
-
-            racks_handle = self.gym.create_actor(env, self.racks_asset, racks_pose, "racks", i, 1)
-            self.racks_handles.append(racks_handle)
-            taizi_idx = self.gym.find_actor_rigid_body_index(env, racks_handle, "taizi", gymapi.DOMAIN_SIM)
-            self.taizi_idxs.append(taizi_idx)
-            # racks_idx = self.gym.find_actor_rigid_body_index(env, racks_handle, "base_link", gymapi.DOMAIN_SIM)
-            # self.racks_idxs.append(racks_idx)
             
             for j in range(self.box_num):
                 box_pose = self.set_random_box_pose()
@@ -300,12 +293,14 @@ class Gym():
                 self.gym.set_rigid_body_color(env, box_handle, 0, gymapi.MESH_VISUAL_AND_COLLISION, red_color)
                 self.box_handles.append(box_handle)
                 box_idx = self.gym.get_actor_rigid_body_index(env, box_handle, 0, gymapi.DOMAIN_SIM)
-                self.box_idxs[j].append(box_idx)
+                self.box_idxs[i,j] = box_idx
                 root_box_idx = self.gym.get_actor_index(env,box_handle,gymapi.DOMAIN_SIM)
-                self.root_box_idxs[j].append(root_box_idx)
+                self.root_box_idxs[i,j] = root_box_idx
 
 
             if robot_type == "frankaLinker":
+                table_handle = self.gym.create_actor(env, self.table_asset, table_pose, "table", i, 1)
+
                 # Add franka
                 robot_handle = self.gym.create_actor(env, self.robot_asset, pose, "franka", i, 1)
 
@@ -356,6 +351,11 @@ class Gym():
                 self.ee_idxs.append(ee_idx)
 
             elif robot_type == "realman":
+                racks_handle = self.gym.create_actor(env, self.racks_asset, racks_pose, "racks", i, 1)
+                self.racks_handles.append(racks_handle)
+                taizi_idx = self.gym.find_actor_rigid_body_index(env, racks_handle, "taizi", gymapi.DOMAIN_SIM)
+                self.taizi_idxs.append(taizi_idx)
+
                 # Add realman
                 robot_handle = self.gym.create_actor(env, self.robot_asset, pose, "realman", i, 1)
 
@@ -375,25 +375,25 @@ class Gym():
                 right_gripper_finger2_idx = self.gym.find_actor_rigid_body_index(env, robot_handle, "Right_Support_Link2", gymapi.DOMAIN_SIM)
                 self.right_gripper_finger2_idxs.append(right_gripper_finger2_idx)
 
-                head_camera_handle = self.gym.create_camera_sensor(env, self.camera_props)
-                head_handle = self.gym.find_actor_rigid_body_index(env, robot_handle, "link_mid_2", gymapi.DOMAIN_SIM)
-                head_camera_pose = gymapi.Transform()
-                head_camera_pose.p = gymapi.Vec3(0.4, -0.05, 0.2)   # 相对link的位置
-                head_camera_pose.r = gymapi.Quat.from_euler_zyx(-0.25, 0.4, 0.2)
-                self.gym.attach_camera_to_body(head_camera_handle, env, head_handle, head_camera_pose, gymapi.FOLLOW_TRANSFORM)
-                head_color_tensor = self.gym.get_camera_image_gpu_tensor(self.sim, env, head_camera_handle, gymapi.IMAGE_COLOR)
-                self.torch_head_color_tensor = gymtorch.wrap_tensor(head_color_tensor)
-                self.head_rgb_tensors.append(self.torch_head_color_tensor)
+                # head_camera_handle = self.gym.create_camera_sensor(env, self.camera_props)
+                # head_handle = self.gym.find_actor_rigid_body_index(env, robot_handle, "link_mid_2", gymapi.DOMAIN_SIM)
+                # head_camera_pose = gymapi.Transform()
+                # head_camera_pose.p = gymapi.Vec3(0.4, -0.05, 0.2)   # 相对link的位置
+                # head_camera_pose.r = gymapi.Quat.from_euler_zyx(-0.25, 0.4, 0.2)
+                # self.gym.attach_camera_to_body(head_camera_handle, env, head_handle, head_camera_pose, gymapi.FOLLOW_TRANSFORM)
+                # head_color_tensor = self.gym.get_camera_image_gpu_tensor(self.sim, env, head_camera_handle, gymapi.IMAGE_COLOR)
+                # self.torch_head_color_tensor = gymtorch.wrap_tensor(head_color_tensor)
+                # self.head_rgb_tensors.append(self.torch_head_color_tensor)
 
-                right_wrist_camera_handle = self.gym.create_camera_sensor(env, self.camera_props)
-                right_wrist_handle = self.gym.find_actor_rigid_body_index(env, robot_handle, "hand_base2", gymapi.DOMAIN_SIM)
-                right_wrist_camera_pose = gymapi.Transform()
-                right_wrist_camera_pose.p = gymapi.Vec3(0.0, -0.05, 0.05)   # 相对link的位置
-                right_wrist_camera_pose.r = gymapi.Quat.from_euler_zyx(0, -2.07, 1.57)
-                self.gym.attach_camera_to_body(right_wrist_camera_handle, env, right_wrist_handle, right_wrist_camera_pose, gymapi.FOLLOW_TRANSFORM)
-                right_wrist_color_tensor = self.gym.get_camera_image_gpu_tensor(self.sim, env, right_wrist_camera_handle, gymapi.IMAGE_COLOR)
-                self.torch_right_wrist_color_tensor = gymtorch.wrap_tensor(right_wrist_color_tensor)
-                self.right_wrist_rgb_tensors.append(self.torch_right_wrist_color_tensor)
+                # right_wrist_camera_handle = self.gym.create_camera_sensor(env, self.camera_props)
+                # right_wrist_handle = self.gym.find_actor_rigid_body_index(env, robot_handle, "hand_base2", gymapi.DOMAIN_SIM)
+                # right_wrist_camera_pose = gymapi.Transform()
+                # right_wrist_camera_pose.p = gymapi.Vec3(0.0, -0.05, 0.05)   # 相对link的位置
+                # right_wrist_camera_pose.r = gymapi.Quat.from_euler_zyx(0, -2.07, 1.57)
+                # self.gym.attach_camera_to_body(right_wrist_camera_handle, env, right_wrist_handle, right_wrist_camera_pose, gymapi.FOLLOW_TRANSFORM)
+                # right_wrist_color_tensor = self.gym.get_camera_image_gpu_tensor(self.sim, env, right_wrist_camera_handle, gymapi.IMAGE_COLOR)
+                # self.torch_right_wrist_color_tensor = gymtorch.wrap_tensor(right_wrist_color_tensor)
+                # self.right_wrist_rgb_tensors.append(self.torch_right_wrist_color_tensor)
 
 
             if obs_type  == "point_cloud":
@@ -428,9 +428,9 @@ class Gym():
 
     def pre_simulate(self,num_envs,asset_root,asset_file,base_pos,base_orn,control_type,obs_type,robot_type):
         self.create_plane()
-        self.create_robot_asset(asset_file["realman"],asset_root)
-        #self.create_table_asset()
-        self.create_racks_aesset(asset_file["racks"],asset_root)
+        self.create_robot_asset(asset_file["frankaLinker"],asset_root)
+        self.create_table_asset()
+        #self.create_racks_aesset(asset_file["racks"],asset_root)
         self.create_box_asset(asset_file["box"],asset_root)
         #self.create_ball_asset(asset_file["ball"],asset_root)
 
@@ -507,13 +507,13 @@ class Gym():
         self.gym.simulate(self.sim)
         self.refresh()
 
-        self.gym.fetch_results(self.sim, True)
-        self.gym.step_graphics(self.sim)
-        self.gym.render_all_camera_sensors(self.sim)
-        self.gym.start_access_image_tensors(self.sim)
+        # self.gym.fetch_results(self.sim, True)
+        # self.gym.step_graphics(self.sim)
+        # self.gym.render_all_camera_sensors(self.sim)
+        # self.gym.start_access_image_tensors(self.sim)
 
 
-        self.gym.end_access_image_tensors(self.sim)
+        # self.gym.end_access_image_tensors(self.sim)
 
 
         if obs_type  == "point_cloud":
@@ -716,7 +716,7 @@ class Gym():
 
     def get_hand_to_object_distance(self):
         hand_base_pos = self.get_two_fingers_mid_point()
-        box_goal_pos = self.get_obj_position()
+        box_goal_pos = self.get_top_obj_position()
         distance = hand_base_pos - box_goal_pos
         return distance
 
@@ -795,7 +795,7 @@ class Gym():
     
     def get_right_gripper_to_object_distance(self):
         right_gripper_mid_pos = self.get_right_gripper_mid_position()
-        obj_pos = self.get_obj_position()
+        obj_pos = self.get_top_obj_position()
         distance = right_gripper_mid_pos - obj_pos
         return distance
     
@@ -823,11 +823,11 @@ class Gym():
 
     def set_random_box_pose(self):
         box_pose = gymapi.Transform()
-        #x = random.uniform(0.7, 0.9)
-        x = 0.8
+        x = random.uniform(0.7, 0.9)
+        #x = 0.8
         y = random.uniform(-0.05, 0.05)
-        # z = 0.325
-        z = 1
+        z = 0.325
+        #z = 1
         box_pose.p = gymapi.Vec3(x, y, z)
         yaw = random.uniform(-math.pi, math.pi)
 
@@ -841,23 +841,42 @@ class Gym():
         return box_pose
 
     def get_obj_position(self):
-        box_pose = self.root_states[self.root_box_idxs[0], :3]
+        box_pose = self.root_states[self.root_box_idxs, :3]
         return box_pose
     
+    def get_top_obj_position(self):
+        initial_box_states = self.initial_root_states[self.root_box_idxs]
+        initial_z_values = initial_box_states[:, :, 2]
+        max_box_idx = torch.argmax(initial_z_values, dim=1)
+        num_envs = initial_z_values.shape[0]
+        env_ids = torch.arange(num_envs, device=self.device)
+        box_states = self.root_states[self.root_box_idxs]
+        top_pos = box_states[env_ids, max_box_idx, 0:3]
+        return top_pos
+    
     def get_obj_quaternion(self):
-        box_goal_quat = self.root_states[self.root_box_idxs[0], 3:7]
+        box_goal_quat = self.root_states[self.root_box_idxs, 3:7]
         return box_goal_quat
     
+    def get_top_obj_quaternion(self):
+        initial_box_states = self.initial_root_states[self.root_box_idxs]
+        initial_z_values = initial_box_states[:, :, 2]
+        max_box_idx = torch.argmax(initial_z_values, dim=1)
+        num_envs = initial_z_values.shape[0]
+        env_ids = torch.arange(num_envs, device=self.device)
+        box_states = self.root_states[self.root_box_idxs]
+        top_quat = box_states[env_ids, max_box_idx, 3:7]
+        return top_quat
     
     def get_gripper_collision_info(self):
         n = torch.tensor([-17.0, 0.0, 54.0], device=self.device)
         n = n / torch.norm(n)
 
-        vel = self.root_states[self.root_box_idxs[0], 7:10]
+        vel = self.root_states[self.root_box_idxs.squeeze(-1), 7:10]
         speed = torch.norm(vel, dim=-1)
         stable = speed < 0.01
 
-        obj_pos = self.get_obj_position()
+        obj_pos = self.get_top_obj_position()
         plane_point = obj_pos - 0.025 * n 
 
         left_pos = self.rb_states[self.right_gripper_finger1_idxs, :3]
@@ -911,17 +930,40 @@ class Gym():
     
     #物体重置条件
     def get_object_reset_info(self):
-        reset_all = []
-        for i in range(self.box_num):
-            box_pos_z = self.rb_states[self.box_idxs[i], 2]
-            table_pos_z = 0.3
-            reset_all.append(box_pos_z < table_pos_z)
-
-        reset_all = torch.stack(reset_all, dim=0)   
-        reset_obj = torch.any(reset_all, dim=0) 
+        box_states = self.rb_states[self.box_idxs]
+        box_pos_z = box_states[:, :, 2]
+        table_pos_z = 0.3
+        below_table = box_pos_z < table_pos_z
+        reset_obj = torch.any(below_table, dim=1)
+       
         return {
             'reset_obj': reset_obj
         }
+    
+    def get_untarget_obj_grasp_info(self):
+        initial_box_states = self.initial_root_states[self.root_box_idxs]
+        initial_z_values = initial_box_states[:, :, 2]
+        top_idx = torch.argmax(initial_z_values, dim=1) #可能有计算冗余问题
+        target_box_idx = top_idx
+
+        box_states = self.root_states[self.root_box_idxs]
+        z_values = box_states[:, :, 2]
+
+        delta_z = z_values - initial_z_values
+        lift_threshold = 0.05
+        lifted_mask = delta_z > lift_threshold
+
+        env_ids = torch.arange(self.num_envs, device=self.device)
+
+        non_target_mask = torch.ones_like(lifted_mask, dtype=torch.bool)
+        non_target_mask[env_ids, target_box_idx] = False
+
+        grasp_untarget = (lifted_mask & non_target_mask).any(dim=1)
+
+        return {
+            'grasp_untarget': grasp_untarget
+        }
+
 
     def create_plane(self):
         plane_params = gymapi.PlaneParams()
@@ -967,12 +1009,11 @@ class Gym():
             return
 
         for env_idx in env_ids.tolist():
-            for box_id in range(self.box_num):
-                reset_obj_idxs = self.root_box_idxs[box_id][env_idx]   # ✅ 关键一步
+            reset_obj_idxs = self.root_box_idxs[env_idx]   # ✅ 关键一步
 
-                self.root_states[reset_obj_idxs, 0:3] = self.initial_root_states[reset_obj_idxs, 0:3]
-                self.root_states[reset_obj_idxs, 3:7] = self.initial_root_states[reset_obj_idxs, 3:7]
-                self.root_states[reset_obj_idxs, 7:13] = torch.zeros(6, device=self.root_states.device)
+            self.root_states[reset_obj_idxs, 0:3] = self.initial_root_states[reset_obj_idxs, 0:3]
+            self.root_states[reset_obj_idxs, 3:7] = self.initial_root_states[reset_obj_idxs, 3:7]
+            self.root_states[reset_obj_idxs, 7:13] = torch.zeros(6, device=self.root_states.device)
 
         self.gym.set_actor_root_state_tensor(self.sim, gymtorch.unwrap_tensor(self.root_states))
         self.refresh()
@@ -1017,7 +1058,7 @@ class Gym():
     def check_reset_events(self, robot_type):
         reset_events = {}
 
-        if robot_type == "franka":
+        if robot_type == "frankaLinker":
 
             finger_info = self.get_finger_collision_info()
             reset_events['finger_collision'] = finger_info['collision_flags']
@@ -1027,6 +1068,9 @@ class Gym():
 
             obj_info = self.get_object_reset_info()
             reset_events['obj_reset'] = obj_info['reset_obj']
+
+            untarget_grasp_info = self.get_untarget_obj_grasp_info()
+            reset_events['grasp_untarget'] = untarget_grasp_info['grasp_untarget']
 
         elif robot_type == "realman":
             obj_info = self.get_object_reset_info()
@@ -1074,7 +1118,7 @@ class Gym():
     def sample_points_on_object_surface(self, num_points, box_size):
         ##仅针对立方体物体，后续需要修改为适应更多物体
         lx, ly, lz = box_size
-        n = num_points // 6
+        n = num_points // 6 #只能取到6的倍数
         pts = []
 
         # z faces
@@ -1113,22 +1157,56 @@ class Gym():
         return R 
     
     def get_points_on_object_surface(self):
-        target_points_world = None
+        target_points_world = []
         other_points_world = []
-        for box_id in range(self.box_num):
-            box_pos = self.root_states[self.root_box_idxs[box_id], 0:3]
-            box_quat = self.root_states[self.root_box_idxs[box_id], 3:7]
-            box_points_local = self.obj_target_points if box_id == 0 else self.obj_other_points
-            R = self.quat_to_rotmat(box_quat)
-            points_local = box_points_local.unsqueeze(0).expand(self.num_envs, -1, -1)  
-            points_world = torch.matmul(points_local, R.transpose(-1, -2)) + box_pos.unsqueeze(1) 
-            if box_id == 0:
-                target_points_world = points_world # (Nenv, 200, 3)
-            else:
-                other_points_world.append(points_world)
 
-        other_points_world = torch.cat(other_points_world, dim=1) # (Nenv, 10*5, 3)
-        return target_points_world, other_points_world
+        initial_box_states = self.initial_root_states[self.root_box_idxs]
+        initial_z_values = initial_box_states[:, :, 2]
+        top_idx = torch.argmax(initial_z_values, dim=1) #可能有计算冗余问题
+        target_box_idx = top_idx
+
+        env_ids = torch.arange(self.num_envs, device=self.device)
+
+        for box_id in range(self.box_num):
+            box_pos = self.root_states[self.root_box_idxs[:, box_id], 0:3]
+            box_quat = self.root_states[self.root_box_idxs[:, box_id], 3:7]
+            R = self.quat_to_rotmat(box_quat)
+
+            is_target = (target_box_idx == box_id)
+            if is_target.any():
+                target_env_ids = env_ids[is_target]
+                pos_t = box_pos[is_target]
+                R_t = R[is_target]
+                local_target = self.obj_target_points.unsqueeze(0).expand(len(target_env_ids), -1, -1)
+                world_target = torch.matmul(local_target, R_t.transpose(-1, -2)) + pos_t.unsqueeze(1)
+                target_points_world.append((target_env_ids, world_target))
+
+            non_target_mask = ~is_target
+            if non_target_mask.any():
+                non_target_env_ids = env_ids[non_target_mask]
+                pos_o = box_pos[non_target_mask]
+                R_o = R[non_target_mask]
+                local_other = self.obj_other_points.unsqueeze(0).expand(len(non_target_env_ids), -1, -1)
+                world_other = torch.matmul(local_other, R_o.transpose(-1, -2)) + pos_o.unsqueeze(1)
+                other_points_world.append((non_target_env_ids, world_other))
+
+            
+        P_target = self.obj_target_points.shape[0]
+        target_tensor = torch.zeros(self.num_envs, P_target, 3, device=self.device)
+        for env_ids_part, pts in target_points_world:
+            target_tensor[env_ids_part] = pts
+
+        P_other = self.obj_other_points.shape[0]
+        other_tensor = torch.zeros(self.num_envs, (self.box_num - 1) * P_other, 3, device=self.device)
+        counter = torch.zeros(self.num_envs, dtype=torch.long, device=self.device)
+        for env_ids_part, pts in other_points_world:
+            for i, env_id in enumerate(env_ids_part):
+                start = counter[env_id] * P_other
+                end = start + P_other
+                other_tensor[env_id, start:end] = pts[i]
+                counter[env_id] += 1
+
+        return target_tensor, other_tensor
     
     
     def get_dpos(self):
@@ -1159,8 +1237,8 @@ class Gym():
         depth_flat = depth_tensor.view(-1)
 
         for box_id in range(self.box_num):
-            actor_id = self.root_box_idxs[box_id][env_id]
-            actor_id = actor_id - 8 * env_id
+            actor_id = self.root_box_idxs[env_id, box_id]
+            actor_id = actor_id - 8 * env_id #这里注意8只是针对当前环境中物体的偏移量，后续如果环境中物体数量发生变化，这个偏移量也需要相应调整
             #print(f"Segmenting depth for Box ID {box_id} with Actor ID {actor_id} in Env ID {env_id}")
             mask = seg_flat == actor_id  
 
