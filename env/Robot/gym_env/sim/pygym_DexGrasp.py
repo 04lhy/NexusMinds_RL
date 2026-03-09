@@ -1117,7 +1117,7 @@ class Gym():
         collision_left = d_left < 0.03
         collision_right = d_right < 0.03
 
-        collision = collision_left | collision_right
+        collision = collision_left | collision_right 
         return {
             'collision_flags': collision
         }
