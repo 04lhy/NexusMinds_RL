@@ -260,6 +260,12 @@ class RobotTaskEnv():
             object_reset_termination = reset_events['obj_reset']
             gripper_collision_termination = reset_events['gripper_collision']
             self.reset_buf = self.time_out_buf |  task_success  | object_reset_termination | gripper_collision_termination
+
+        elif robot_type == "reallinker":
+            reset_events = self.sim.check_reset_events(robot_type)
+            object_reset_termination = reset_events['obj_reset']
+            right_hand_collision_termination = reset_events['right_hand_collision']
+            self.reset_buf = self.time_out_buf |  task_success  | object_reset_termination | right_hand_collision_termination
     
 
     

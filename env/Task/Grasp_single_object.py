@@ -102,7 +102,7 @@ class Grasp_single_object(Task):
         return self.pos_reach_distance * reward_pos
 
     def reward_hand_down(self):
-        x_hand = self.sim.get_rigid_body_x_axis_world()
+        x_hand = self.sim.get_rigid_body_x_axis_world(self.robot_type)
 
         world_down = torch.tensor(
             [0.0, 0.0, 1.0],
@@ -117,7 +117,7 @@ class Grasp_single_object(Task):
         return -self.hand_down * reward
     
     def reward_hand_align(self):
-        x_hand = self.sim.get_rigid_body_x_axis_world()
+        x_hand = self.sim.get_rigid_body_x_axis_world(self.robot_type)
 
         world_down = torch.tensor(
             [0.0, 0.0, 1.0],

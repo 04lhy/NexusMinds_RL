@@ -27,6 +27,15 @@ class Realman(Robot):
         # 准备资产，创建环境，为后续的控制做好准备
         self.sim.pre_simulate(cfg.num_envs, cfg.asset, cfg.urdf_files_dict, cfg.base_pose, cfg.base_orn, cfg.control_type, cfg.obs_type, cfg.robot_type)
 
+        initial_steps = 10
+        for i in range(initial_steps):
+            self.sim.gym.simulate(self.sim.sim)
+            self.sim.refresh()
+
+        self.sim.initial_box_state = self.sim.root_states[self.sim.root_box_idxs].clone()
+        self.sim.get_target_box_idx()
+        
+
     def step(self, action) -> None:
         action = action.clone()  # ensure action don't change
         action = torch.clamp(action, self.cfg.action_low, self.cfg.action_high)
@@ -63,16 +72,24 @@ class Realman(Robot):
 
 
         elif self.cfg.control_type == "position":
-            right_arm_displacement = action[:, 16:] * 0.05
-            right_arm_joint_pos = self.sim.get_joint_pos()[:, 16:] 
+            right_arm_displacement = action[:, 1:8] * 0.05
+            right_arm_joint_pos = self.sim.get_joint_pos()[:, 1:8] 
             u1 = self.sim.realman_right_arm_joint_to_pos(right_arm_displacement, right_arm_joint_pos)
 
-            other_displacement = action[:, :16] * 0
-            other_joints_pos = self.sim.get_joint_pos()[:, :16]
+            other_displacement = action[:, :1] * 0
+            other_joints_pos = self.sim.get_joint_pos()[:, :1]
             u2 = self.sim.realman_other_joint_to_pos(other_displacement, other_joints_pos)
 
+            distance = self.sim.get_right_gripper_to_object_distance()
+            distance = torch.norm(distance, dim=-1)
+            mask = distance > 0.05
 
-            u = torch.cat([u2, u1], dim=1)
+            right_gripper_displacement = action[:, 8:] * 0.05
+            right_gripper_joint_pos = self.sim.get_joint_pos()[:, 8:]
+            u3 = self.sim.realman_right_gripper_joint_to_pos(right_gripper_displacement, right_gripper_joint_pos)
+            u3[mask] = 0
+
+            u = torch.cat([u2, u1, u3], dim=1)
             u = self.sim.build_full_command_with_tendon(u)
             
             return u
@@ -82,7 +99,7 @@ class Realman(Robot):
 
     def get_obs(self) -> torch.Tensor:
         # end-effector position  velocity orientation  angular velocity
-        dof_pos = self.sim.get_joint_pos()[:, 16:].squeeze(-1)
+        dof_pos = self.sim.get_joint_pos()[:, 1:].squeeze(-1)
         ee_position = self.sim.get_right_ee_position()
         ee_orientation = self.sim.get_right_ee_orientation()
         ee_velocity = self.sim.get_right_ee_velocity()

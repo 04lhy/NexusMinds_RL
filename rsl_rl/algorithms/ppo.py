@@ -46,7 +46,7 @@ class PPO:
                  lam=0.95,#GAE的平滑参数
                  value_loss_coef=1.0,#价值函数损失的权重
                  entropy_coef=0.0,#熵奖励的权重
-                 learning_rate=1e-3,#优化器的学习率
+                 learning_rate=1e-4,#优化器的学习率
                  max_grad_norm=1.0,#梯度裁剪的最大范数
                  use_clipped_value_loss=True,#是否使用裁剪的价值函数损失
                  schedule="fixed",#学习率调度方式

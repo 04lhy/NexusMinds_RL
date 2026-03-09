@@ -8,7 +8,7 @@ args = gymutil.parse_arguments(
         {"name": "--use_gpu_pipeline", "type": bool, "default": False, "help": "Use GPU pipeline"},
         {"name": "--headless", "type": bool, "default": False, "help": "Run simulation without viewer"},
         {"name": "--logdir", "type": str, "default": "logs", "help": "Directory for logging"},
-        {"name": "--num_envs", "type":int, "default":2048, "help": "the number of environments to train"},
+        {"name": "--num_envs", "type":int, "default":20, "help": "the number of environments to train"},
     ]   
 )
 
@@ -50,9 +50,9 @@ class RobotCfg:
         self.control_type = global_cfg.control_type 
         self.obs_type = global_cfg.obs_type
         self.block_gripper = True
-        self.num_actions = 29 
+        self.num_actions = 14 
         self.num_obs = 46 
-        self.robot_num_dofs = 29
+        self.robot_num_dofs = 14
         self.num_envs = global_cfg.num_envs  # 修改其他配置一致
         self.control_type_sim = global_cfg.control_type
         self.obs_type_sim = global_cfg.obs_type
@@ -153,6 +153,8 @@ class TaskCfg:
         self.c11 = 100
         self.c12 = 2
         self.c13 = 2
+        
+        self.gripper_close = 20
 
         self.alpha_mid =1.5
         self.alpha_pos =1.5
@@ -164,9 +166,11 @@ class TaskCfg:
         self.reward_scales = {
             "grasp_goal_distance" : self.c1 * self.c4 * self.c5,
             "grasp_mid_point" : self.c1 * self.c4 * self.c6,
-            "pos_reach_distance" : self.c2 ,
+            #"pos_reach_distance" : self.c2 ,
             "obj_reset": self.c9,
             "gripper_collision_reset": self.c7,
+            "hand_down": self.c10,
+            "gripper_close": self.gripper_close
         }
 
 

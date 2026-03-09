@@ -4,8 +4,8 @@ from datetime import datetime
 import sys
 
 # 首先导入包含 Isaac Gym 的配置和环境模块
-from configs.LinkerHandGrasp_config import LinkGraspCfg
-from env.TaskRobotEnv import LinkerHandGraspDexterousGym
+from configs.RealmanGrasp_config import RealGraspCfg
+from env.TaskRobotEnv import RealmanGraspSingleGym
 
 # 然后导入可能包含 PyTorch 的 rsl_rl 模块
 from rsl_rl.runners import OnPolicyRunner
@@ -14,11 +14,11 @@ from rsl_rl.utils import class_to_dict
 
 def train():
 
-    cfg = LinkGraspCfg()
+    cfg = RealGraspCfg()
     train_cfg = class_to_dict(rslCfgPPO())
     
     # 使用正确的环境类和配置
-    env = LinkerHandGraspDexterousGym(cfg)  
+    env = RealmanGraspSingleGym(cfg)
     
     # 将 Runner 放在与环境一致的设备上
 

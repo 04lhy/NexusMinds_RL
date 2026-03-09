@@ -1,6 +1,7 @@
 from .utils import distance
 from typing import Any, Dict, List
 import torch
+import math
 from ..core import Task
 
 
@@ -21,12 +22,13 @@ class Realman_Grasp_single_object(Task):
         self.alpha_align = cfg.alpha_align
         self.grasp_goal_distance = cfg.reward_scales["grasp_goal_distance"]
         self.grasp_mid_point = cfg.reward_scales["grasp_mid_point"]
-        self.pos_reach_distance = cfg.reward_scales["pos_reach_distance"]
+        # self.pos_reach_distance = cfg.reward_scales["pos_reach_distance"]
         self.gripper_collision_reset = cfg.reward_scales["gripper_collision_reset"]
         # self.body_collision_reset = cfg.reward_scales["body_collision_reset"]
         self.obj_reset = cfg.reward_scales["obj_reset"]
-        # self.hand_down = cfg.reward_scales["hand_down"]
-        # self.hand_align = cfg.reward_scales["hand_align"]
+        self.hand_down = cfg.reward_scales["hand_down"]
+        self.gripper_close = cfg.reward_scales['gripper_close']
+        # self.hand_align = cfg.reward_scales["hand_a lign"]
         #self.success = cfg.reward_scales["success"]
         
         # self.finger_z_distance = cfg.reward_scales["finger_z_distance"]
@@ -50,7 +52,7 @@ class Realman_Grasp_single_object(Task):
     def reset_ids(self, env_ids: torch.Tensor) -> torch.Tensor:
 
         """只为指定环境重置目标"""
-        goals_pos = torch.tensor([0.5, 0, 0.525], dtype=torch.float32, device=self.device)
+        goals_pos = torch.tensor([0.7, 0, 1.125], dtype=torch.float32, device=self.device)
         goals_pos = goals_pos.unsqueeze(0).expand(self.num_envs, 3)
         self.goal = goals_pos
 
@@ -73,14 +75,40 @@ class Realman_Grasp_single_object(Task):
      
     def reward_grasp_goal_distance(self):
         achieved_goal = self.get_achieved_goal()
+        initial_stable_position = self.sim.get_top_obj_initial_position() #有问题
 
-        d = self.goal[:, 2] - achieved_goal[:, 2] 
+        # 获取桌面的法向
+        x_edge = 0.54  
+        z_edge = 0.17 
+
+        # 计算法向量的 x 和 z 分量
+        magnitude = math.sqrt(x_edge**2 + z_edge**2)
+        table_normal = torch.tensor([-z_edge / magnitude, 0.0, x_edge / magnitude]).to(self.device)  # 法向量
+
+        # 计算目标位置与物体位置沿法向量方向的投影差
+        goal_projection = torch.sum(self.goal * table_normal, dim=1)  # 点积
+        achieved_goal_projection = torch.sum(achieved_goal * table_normal, dim=1)  # 点积
+        initial_stable_position_projection = torch.sum(initial_stable_position * table_normal, dim=1)  # 点积
+
+        # 计算物体落在桌面稳定后的位置
+        # stable = self.sim.is_obj_stable()
+        # self.initial_position_recorded = False
+        # if not self.initial_position_recorded and torch.all(stable):
+        #     self.initial_stable_position = self.get_top_obj_position()  # 获取掉落后初始位置
+        #     self.initial_position_recorded = True 
+
+        # 计算物体与目标在法向量方向的差值（即法向上的距离）
+        initial_d = goal_projection - initial_stable_position_projection  # 物体初始位置的法向投影
+
+        d = goal_projection - achieved_goal_projection  # 当前物体与目标的法向投影差
+
+        # 处理奖励类型
         if self.reward_type == "sparse":
             goal_distance = (d > self.distance_threshold).float()
         else:
             goal_distance = d
 
-        return self.grasp_goal_distance * (0.2 - goal_distance)
+        return self.grasp_goal_distance * (initial_d - goal_distance)
 
     def reward_grasp_mid_point(self):
         two_fingers_mid = self.sim.get_right_gripper_mid_position()
@@ -91,30 +119,30 @@ class Realman_Grasp_single_object(Task):
 
         return self.grasp_mid_point * r_neg
 
-    def reward_pos_reach_distance(self):
+    # def reward_pos_reach_distance(self):
 
-        hand_base_pos = self.sim.get_right_ee_position()
+    #     hand_base_pos = self.sim.get_right_ee_position()
 
-        d = torch.norm(hand_base_pos - self.sim.get_top_obj_position(), dim=-1)
+    #     d = torch.norm(hand_base_pos - self.sim.get_top_obj_position(), dim=-1)
 
-        reward_pos = torch.exp(-self.alpha_pos * d)
+    #     reward_pos = torch.exp(-self.alpha_pos * d)
 
-        return self.pos_reach_distance * reward_pos
+    #     return self.pos_reach_distance * reward_pos
 
-    # def reward_hand_down(self):
-    #     x_hand = self.sim.get_rigid_body_x_axis_world()
+    def reward_hand_down(self):
+        x_hand = self.sim.get_rigid_body_x_axis_world(self.robot_type)
 
-    #     world_down = torch.tensor(
-    #         [0.0, 0.0, 1.0],
-    #         device=x_hand.device
-    #     ).expand_as(x_hand)
+        world_down = torch.tensor(
+            [0.0, 0.0, 1.0],
+            device=x_hand.device
+        ).expand_as(x_hand)
 
-    #     cos_sim = torch.sum(x_hand * world_down, dim=1)
+        cos_sim = torch.sum(x_hand * world_down, dim=1)
 
-    #     cos_sim = torch.clamp(cos_sim, 0.0, 1.0)
+        cos_sim = torch.clamp(cos_sim, 0.0, 1.0)
 
-    #     reward = torch.exp(-self.alpha_down * (1.0 - cos_sim))
-    #     return -self.hand_down * reward
+        reward = torch.exp(-self.alpha_down * (1.0 - cos_sim))
+        return -self.hand_down * reward
     
     # def reward_hand_align(self):
     #     x_hand = self.sim.get_rigid_body_x_axis_world()
@@ -150,6 +178,23 @@ class Realman_Grasp_single_object(Task):
         obj_reset = reset_events['obj_reset'].float()
 
         return -self.obj_reset * obj_reset
+
+
+    #逻辑有问题但目前不影响训练，后续修改
+    def reward_gripper_close(self):
+        contact_force_1,_ = self.sim.get_gripper_contact_force()
+        _, contact_force_2 = self.sim.get_gripper_contact_force()
+        contact = torch.logical_and(contact_force_1 > 5.0, contact_force_2 > 5.0)
+
+        gripper_width = self.sim.get_gripper_width()
+        box_size = 0.05
+        width = gripper_width == box_size
+
+        close = torch.logical_and(contact, width)
+        close = close.float()
+
+        return self.gripper_close * close
+
     
     # def reward_success(self):
     #     success = self.is_success()
