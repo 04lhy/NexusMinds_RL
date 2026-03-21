@@ -97,8 +97,8 @@
     <axis
       xyz="0 0 -1" />
     <limit
-      lower="-0.75"
-      upper="-0.75"
+      lower="-0.9" 
+      upper="-0.9"
       effort="0"
       velocity="0.001" />
   </joint>
@@ -522,7 +522,7 @@
     <visual>
       <origin
         xyz="0 0 0"
-        rpy="-1.57 0 -1.57" />
+        rpy="-1.57 0 0" />
       <geometry>
         <mesh
           filename="package://Embodied lifting robot_two wheels_RM75-B-V/meshes/link_right_7.STL" />
@@ -536,7 +536,7 @@
     <collision>
       <origin
         xyz="0 0 0"
-        rpy="0 0 -1.57" />
+        rpy="0 0 0" />
       <geometry>
         <mesh
           filename="package://Embodied lifting robot_two wheels_RM75-B-V/meshes/link_right_7.STL" />
@@ -606,7 +606,7 @@
     type="fixed">
     <origin
       xyz="0 0 0.0228"
-      rpy="0 0 0" />
+      rpy="0 0 -1.57" />
     <parent
       link="link_right_7" />
     <child
@@ -641,7 +641,7 @@
       <material
         name="">
         <color
-          rgba="0.615686274509804 0.63921568627451 0.674509803921569 1" />
+          rgba="0 0 0 1" />
       </material>
     </visual>
     <collision>
@@ -699,7 +699,7 @@
       <material
         name="">
         <color
-          rgba="0.615686274509804 0.63921568627451 0.674509803921569 1" />
+          rgba="0 0 0 1" />
       </material>
     </visual>
     <collision>
@@ -761,7 +761,7 @@
       <material
         name="">
         <color
-          rgba="0.615686274509804 0.63921568627451 0.674509803921569 1" />
+          rgba="0 0 0 1" />
       </material>
     </visual>
     <collision>
@@ -823,7 +823,7 @@
       <material
         name="">
         <color
-          rgba="0.615686274509804 0.63921568627451 0.674509803921569 1" />
+          rgba="0 0 0 1" />
       </material>
     </visual>
     <collision>
@@ -885,7 +885,7 @@
       <material
         name="">
         <color
-          rgba="0.615686274509804 0.63921568627451 0.674509803921569 1" />
+          rgba="0 0 0 1" />
       </material>
     </visual>
     <collision>
@@ -947,7 +947,7 @@
       <material
         name="">
         <color
-          rgba="0.615686274509804 0.63921568627451 0.674509803921569 1" />
+          rgba="0 0 0 1" />
       </material>
     </visual>
     <collision>

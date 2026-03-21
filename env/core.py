@@ -267,8 +267,6 @@ class RobotTaskEnv():
             right_hand_collision_termination = reset_events['right_hand_collision']
             self.reset_buf = self.time_out_buf |  task_success  | object_reset_termination | right_hand_collision_termination
     
-
-    
     def compute_reward(self):
         """ Compute rewards
             Calls each reward function which had a non-zero scale (processed in self._prepare_reward_function())

@@ -82,9 +82,11 @@ class Realman(Robot):
 
             distance = self.sim.get_right_gripper_to_object_distance()
             distance = torch.norm(distance, dim=-1)
-            mask = distance > 0.05
+            mask = distance > 0.08
 
-            right_gripper_displacement = action[:, 8:] * 0.05
+            # print(mask)
+
+            right_gripper_displacement = action[:, 8:] * 0.1
             right_gripper_joint_pos = self.sim.get_joint_pos()[:, 8:]
             u3 = self.sim.realman_right_gripper_joint_to_pos(right_gripper_displacement, right_gripper_joint_pos)
             u3[mask] = 0

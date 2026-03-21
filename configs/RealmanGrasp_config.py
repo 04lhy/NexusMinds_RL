@@ -145,22 +145,22 @@ class TaskCfg:
         self.c3 = 1
         self.c4 = 1
         self.c5 = 10
-        self.c6 = 3
+        self.c6 = 6 #6
         self.c7 = 10
         self.c8 = 10
         self.c9 = 10
         self.c10 = 2
         self.c11 = 100
-        self.c12 = 2
-        self.c13 = 2
-        
-        self.gripper_close = 20
+        self.c12 = 7 #7
+        self.c13 = 3 #3
+        self.c14 = 3
 
         self.alpha_mid =1.5
         self.alpha_pos =1.5
         self.alpha_neg = 1.5
         self.alpha_down = 1.5
         self.alpha_align = 1.5
+        self.alpha_close = 1.5
 
         # 改为字典的方式：
         self.reward_scales = {
@@ -169,8 +169,10 @@ class TaskCfg:
             #"pos_reach_distance" : self.c2 ,
             "obj_reset": self.c9,
             "gripper_collision_reset": self.c7,
-            "hand_down": self.c10,
-            "gripper_close": self.gripper_close
+            "hand_up_penalty": self.c10,
+            "hand_down":self.c12,
+            "gripper_align":self.c13,
+            "gripper_close":self.c14
         }
 
 

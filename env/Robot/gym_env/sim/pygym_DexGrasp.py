@@ -26,18 +26,18 @@ class Gym():
         self.sim_params = gymapi.SimParams()
         self.sim_params.up_axis = gymapi.UP_AXIS_Z
         self.sim_params.gravity = gymapi.Vec3(0.0, 0.0, -9.8)
-        self.sim_params.dt = 1.0 / 60.0
+        self.sim_params.dt = 1.0 / 120.0
         self.sim_params.substeps = 2
         self.sim_params.use_gpu_pipeline = args.use_gpu_pipeline
         self.sim_params.physx.max_gpu_contact_pairs = 8 * 1024 * 1024
         self.sim_params.physx.default_buffer_size_multiplier = 2.0
         if args.physics_engine == gymapi.SIM_PHYSX:
-            self.sim_params.physx.solver_type = 1  # 0:PGS 1:TGS
-            self.sim_params.physx.num_position_iterations = 4
+            self.sim_params.physx.solver_type = 1  # 0:PG2S 1:TGS
+            self.sim_params.physx.num_position_iterations = 8
             self.sim_params.physx.num_velocity_iterations = 1
             self.sim_params.physx.num_threads = 4
             self.sim_params.physx.use_gpu = args.use_gpu
-            self.sim_params.physx.contact_offset = 0.0003
+            self.sim_params.physx.contact_offset = 0.001
             self.sim_params.physx.rest_offset = 0.0
             # self.sim_params.physx.bounce_threshold_velocity = 0.2
             # self.sim_params.physx.max_depenetration_velocity = 10.0
@@ -133,6 +133,8 @@ class Gym():
             sp.rolling_friction = 0.1  # 滚动摩擦
             sp.torsion_friction = 0.1  # 扭转摩擦
             sp.restitution = 0.1  # 弹性（反弹）
+            # sp.contact_offset = 0.002   # 接触检测偏移
+            # sp.rest_offset = 0.001      # 静止接触偏移
         self.gym.set_asset_rigid_shape_properties(self.box_asset, shape_props)
 
     # 后面接入参数，设置pd参数等等
@@ -164,12 +166,21 @@ class Gym():
 
         elif robot_type == "realman":
             self.default_dof_state = np.zeros(self.robot_num_dofs, gymapi.DofState.dtype)
-            self.default_dof_state["pos"][:1] = -0.75
+            self.default_dof_state["pos"][:1] = -0.9
+            # self.default_dof_state["pos"][:1] = -0.75
             self.default_dof_state["pos"][1:2] = -2.22
             self.default_dof_state["pos"][2:3] = -1.14
             self.default_dof_state["pos"][3:6] = 0
             self.default_dof_state["pos"][6:7] = -1.6
-            self.default_dof_state["pos"][7:8] = -0.3
+            self.default_dof_state["pos"][7:8] = 1.700460327584059
+            # self.default_dof_state["pos"][:1] = -0.9
+            # self.default_dof_state["pos"][1:2] = -2.833887615804689
+            # self.default_dof_state["pos"][2:3] = -2.087996725355384
+            # self.default_dof_state["pos"][3:4] = 2.708609627425788
+            # self.default_dof_state["pos"][4:5] = -1.5472047112956893
+            # self.default_dof_state["pos"][5:6] = 0.6880786043062445
+            # self.default_dof_state["pos"][6:7] = 1.8933139739416767
+            # self.default_dof_state["pos"][7:8] = -1.700460327584059
             self.default_dof_state["pos"][8:] = 0
             self.default_dof_pos = torch.tensor(self.default_dof_state["pos"], dtype=torch.float32, device=self.device)
             self.default_dof_pos = self.default_dof_pos.unsqueeze(0)
@@ -189,8 +200,8 @@ class Gym():
                 self.robot_dof_props["damping"][1:8].fill(40)
 
                 self.robot_dof_props["driveMode"][8:9].fill(gymapi.DOF_MODE_POS)
-                self.robot_dof_props["stiffness"][8:9].fill(800)  # 夹爪参数参考gym官方示例
-                self.robot_dof_props["damping"][8:9].fill(40)
+                self.robot_dof_props["stiffness"][8:9].fill(1000)  # 夹爪参数参考gym官方示例
+                self.robot_dof_props["damping"][8:9].fill(50)
 
                 for i in range(9, 14):
                     self.robot_dof_props["driveMode"][i].fill(gymapi.DOF_MODE_POS)
@@ -201,7 +212,7 @@ class Gym():
 
         elif robot_type == "reallinker":
             self.default_dof_state = np.zeros(self.robot_num_dofs, gymapi.DofState.dtype)
-            self.default_dof_state["pos"][:1] = -0.75
+            self.default_dof_state["pos"][:1] = -0.95
             self.default_dof_state["pos"][1:2] = -2.22
             self.default_dof_state["pos"][2:3] = -1.14
             self.default_dof_state["pos"][3:6] = 0
@@ -238,7 +249,8 @@ class Gym():
         table_pose.p = gymapi.Vec3(0.9, 0.0, 0.4)
 
         racks_pose = gymapi.Transform()
-        racks_pose.p = gymapi.Vec3(2.7, -0.55, 0)
+        racks_pose.p = gymapi.Vec3(2.55, -0.55, 0)
+        # racks_pose.p = gymapi.Vec3(2.7, -0.55, 0)
         racks_pose.r = gymapi.Quat(0, 0, -0.7071, 0.7071)
 
         self.num_envs = num_envs
@@ -316,8 +328,8 @@ class Gym():
             for j in range(self.box_num):
                 box_pose = self.set_random_box_pose()
                 box_handle = self.gym.create_actor(env, self.box_asset, box_pose, f"box_{j}", i, 0, j + 1)
-                red_color = gymapi.Vec3(0.0, 0.2, 0.6)
-                self.gym.set_rigid_body_color(env, box_handle, 0, gymapi.MESH_VISUAL_AND_COLLISION, red_color)
+                color = gymapi.Vec3(0.7, 0.6, 0.9)
+                self.gym.set_rigid_body_color(env, box_handle, 0, gymapi.MESH_VISUAL_AND_COLLISION, color)
                 self.box_handles.append(box_handle)
                 box_idx = self.gym.get_actor_rigid_body_index(env, box_handle, 0, gymapi.DOMAIN_SIM)
                 self.box_idxs[i, j] = box_idx
@@ -403,16 +415,28 @@ class Gym():
                 # Get inital ee pose
                 right_ee_idx = self.gym.find_actor_rigid_body_index(env, robot_handle, "hand_base2", gymapi.DOMAIN_SIM)
                 self.right_ee_idxs.append(right_ee_idx)
-
+               
                 # get finger pose
-                right_gripper_finger1_idx = self.gym.find_actor_rigid_body_index(env, robot_handle,
-                                                                                 "Left_Support_Link2",
-                                                                                 gymapi.DOMAIN_SIM)
+                right_gripper_finger1_idx = self.gym.find_actor_rigid_body_index(env, robot_handle, "Left_Support_Link2", gymapi.DOMAIN_SIM)
                 self.right_gripper_finger1_idxs.append(right_gripper_finger1_idx)
-                right_gripper_finger2_idx = self.gym.find_actor_rigid_body_index(env, robot_handle,
-                                                                                 "Right_Support_Link2",
-                                                                                 gymapi.DOMAIN_SIM)
+                right_gripper_finger2_idx = self.gym.find_actor_rigid_body_index(env, robot_handle, "Right_Support_Link2", gymapi.DOMAIN_SIM)
                 self.right_gripper_finger2_idxs.append(right_gripper_finger2_idx)
+               
+                link_names = [
+                    "hand_base2",
+                    "Left_Support_Link2",
+                    "Right_Support_Link2",
+                    "Left_1_Link2",
+                    "Left_2_Link2",
+                    "Right_1_Link2",
+                    "Right_2_Link2"
+                ]
+
+                color = gymapi.Vec3(0.1, 0.1, 0.1)
+
+                for name in link_names:
+                    body_idx = self.gym.find_actor_rigid_body_index(env, robot_handle, name, gymapi.DOMAIN_ACTOR)
+                    self.gym.set_rigid_body_color(env, robot_handle,body_idx, gymapi.MESH_VISUAL_AND_COLLISION, color)
 
                 # head_camera_handle = self.gym.create_camera_sensor(env, self.camera_props)
                 # head_handle = self.gym.find_actor_rigid_body_index(env, robot_handle, "link_mid_2", gymapi.DOMAIN_SIM)
@@ -427,8 +451,8 @@ class Gym():
                 # right_wrist_camera_handle = self.gym.create_camera_sensor(env, self.camera_props)
                 # right_wrist_handle = self.gym.find_actor_rigid_body_index(env, robot_handle, "hand_base2", gymapi.DOMAIN_SIM)
                 # right_wrist_camera_pose = gymapi.Transform()
-                # right_wrist_camera_pose.p = gymapi.Vec3(0.0, -0.05, 0.05)   # 相对link的位置
-                # right_wrist_camera_pose.r = gymapi.Quat.from_euler_zyx(0, -2.07, 1.57)
+                # right_wrist_camera_pose.p = gymapi.Vec3(0.0, 0.05, 0.08)   # 相对link的位置
+                # right_wrist_camera_pose.r = gymapi.Quat.from_euler_zyx(3.14, -1.5, 1.57)
                 # self.gym.attach_camera_to_body(right_wrist_camera_handle, env, right_wrist_handle, right_wrist_camera_pose, gymapi.FOLLOW_TRANSFORM)
                 # right_wrist_color_tensor = self.gym.get_camera_image_gpu_tensor(self.sim, env, right_wrist_camera_handle, gymapi.IMAGE_COLOR)
                 # self.torch_right_wrist_color_tensor = gymtorch.wrap_tensor(right_wrist_color_tensor)
@@ -517,7 +541,7 @@ class Gym():
         self.create_robot_asset(asset_file["realman"], asset_root)
         #self.create_table_asset()
         self.create_racks_aesset(asset_file["racks"],asset_root)
-        self.create_box_asset(asset_file["oreo"], asset_root)
+        self.create_box_asset(asset_file["box"], asset_root)
         # self.create_ball_asset(asset_file["ball"],asset_root)
 
         # get joint limits and ranges for Franka
@@ -600,6 +624,12 @@ class Gym():
 
         self.gym.simulate(self.sim)
         self.refresh()
+
+        # print("joint",self.get_joint_pos())
+
+        # print("now",self.get_top_obj_position())
+        # print("initial",self.get_top_obj_initial_position())
+        # print(self.get_joint_pos())
 
         # self.gym.step_graphics(self.sim)
         # self.gym.render_all_camera_senss(self.sim)
@@ -896,10 +926,18 @@ class Gym():
     def get_right_ee_angular_velocity(self):
         right_ee_ang_vel = self.rb_states[self.right_ee_idxs, 10:13]
         return right_ee_ang_vel
+    
+    def get_gripper_finger1_pos(self):
+        right_finger1_pos = self.rb_states[self.right_gripper_finger1_idxs, :3]
+        return right_finger1_pos
+    
+    def get_gripper_finger2_pos(self):
+        right_finger2_pos = self.rb_states[self.right_gripper_finger2_idxs, :3]
+        return right_finger2_pos
 
     def get_right_gripper_mid_position(self):
-        right_finger1_pos = self.rb_states[self.right_gripper_finger1_idxs, :3]
-        right_finger2_pos = self.rb_states[self.right_gripper_finger2_idxs, :3]
+        right_finger1_pos = self.get_gripper_finger1_pos()
+        right_finger2_pos = self.get_gripper_finger2_pos()
         mid_position = (right_finger1_pos + right_finger2_pos) / 2.0
         return mid_position
 
@@ -910,8 +948,8 @@ class Gym():
         return distance
 
     def get_gripper_width(self):
-        right_finger1_pos = self.rb_states[self.right_gripper_finger1_idxs, :3]
-        right_finger2_pos = self.rb_states[self.right_gripper_finger2_idxs, :3]
+        right_finger1_pos = self.get_gripper_finger1_pos()
+        right_finger2_pos = self.get_gripper_finger2_pos()
         width = torch.norm(right_finger1_pos - right_finger2_pos, dim=-1)
         return width
 
@@ -1000,8 +1038,10 @@ class Gym():
     def set_random_box_pose(self):
         box_pose = gymapi.Transform()
         # x = random.uniform(0.7, 0.9)
-        x = 0.8
-        y = random.uniform(-0.05, 0.05)
+        x = 0.7
+        y = random.uniform(0.05, 0.15)
+        #y = random.uniform(-0.05, 0.05)
+        #y = 0.1
         # z = 0.325
         z = 0.95
         box_pose.p = gymapi.Vec3(x, y, z)
@@ -1031,14 +1071,6 @@ class Gym():
         return box_pose
 
     def get_top_obj_position(self):
-        # initial_box_states = self.initial_root_states[self.root_box_idxs]
-        # initial_z_values = initial_box_states[:, :, 2]
-        # max_box_idx = torch.argmax(initial_z_values, dim=1)
-        # num_envs = initial_z_values.shape[0]
-
-        assert hasattr(self, 'target_box_idx'), "target_box_idx 未定义"
-        assert self.target_box_idx.max() < self.box_num, f"target_box_idx 越界！max={self.target_box_idx.max()}, box_num={self.box_num}"
-
         env_ids = torch.arange(self.num_envs, device=self.device)
         box_states = self.root_states[self.root_box_idxs]
         top_pos = box_states[env_ids, self.target_box_idx, 0:3]
@@ -1049,14 +1081,6 @@ class Gym():
         return box_goal_quat
 
     def get_top_obj_quaternion(self):
-        # initial_box_states = self.initial_root_states[self.root_box_idxs]
-        # initial_z_values = initial_box_states[:, :, 2]
-        # max_box_idx = torch.argmax(initial_z_values, dim=1)
-        # num_envs = initial_z_values.shape[0]
-
-        assert hasattr(self, 'target_box_idx'), "target_box_idx 未定义"
-        assert self.target_box_idx.max() < self.box_num, f"target_box_idx 越界！max={self.target_box_idx.max()}, box_num={self.box_num}"
-
         env_ids = torch.arange(self.num_envs, device=self.device)
         box_states = self.root_states[self.root_box_idxs]
         top_quat = box_states[env_ids, self.target_box_idx, 3:7]
@@ -1068,23 +1092,9 @@ class Gym():
         stable = speed < 0.01 #可能有问题
 
         return stable
-    
-    # def get_initial_top_obj_stable_position(self):
-    #     vel = self.root_states[self.root_box_idxs.squeeze(-1), 7:10]
-    #     speed = torch.norm(vel, dim=-1)
-    #     stable = speed < 0.01
-
-    #     initial_stable_position = None
-    #     initial_position_recorded = False
-    #     if not initial_position_recorded and torch.all(stable):
-    #         initial_stable_position = self.get_top_obj_position()  # 获取掉落后初始位置
-    #         initial_position_recorded = True 
-
-    #     return initial_stable_position
 
     def get_obj_initial_position(self):
         self.initial_box_state = None
-        print(self.initial_box_state)
 
     def get_target_box_idx(self):
         initial_z_values = self.initial_box_state[:, :, 2]
@@ -1094,10 +1104,16 @@ class Gym():
     def get_top_obj_initial_position(self):
 
         env_ids = torch.arange(self.num_envs, device=self.device)
-        #initial_box_states = self.initial_root_states[self.root_box_idxs]
         top_box_initial_pose = self.initial_box_state[env_ids, self.target_box_idx, 0:3]
 
         return top_box_initial_pose
+    
+    def get_top_obj_initial_quaternion(self):
+
+        env_ids = torch.arange(self.num_envs, device=self.device)
+        top_box_initial_quaternion = self.initial_box_state[env_ids, self.target_box_idx, 3:7]
+
+        return top_box_initial_quaternion
 
     def get_gripper_collision_info(self):
         n = torch.tensor([-17.0, 0.0, 54.0], device=self.device)
@@ -1106,7 +1122,7 @@ class Gym():
         stable = self.is_obj_stable() 
 
         initial_obj_pos = self.get_top_obj_initial_position() #后续堆叠场景修改
-        plane_point = initial_obj_pos - 0.025 * n
+        plane_point = initial_obj_pos - 0.02 * n
 
         left_pos = self.rb_states[self.right_gripper_finger1_idxs, :3]
         right_pos = self.rb_states[self.right_gripper_finger2_idxs, :3]
@@ -1114,8 +1130,8 @@ class Gym():
         d_left = torch.sum(n * (left_pos - plane_point), dim=1)
         d_right = torch.sum(n * (right_pos - plane_point), dim=1)
 
-        collision_left = d_left < 0.03
-        collision_right = d_right < 0.03
+        collision_left = d_left < 0.025
+        collision_right = d_right < 0.025
 
         collision = collision_left | collision_right 
         return {
@@ -1367,6 +1383,19 @@ class Gym():
         x_world = quat_rotate(quat, x_local)
 
         return x_world
+
+    def get_obj_y_axis_world(self):
+        self.refresh()
+        obj_quat = self.get_top_obj_quaternion()
+
+        y_local = torch.tensor(
+            [0.0, 1.0, 0.0],
+            device=obj_quat.device
+        ).expand(obj_quat.shape[0], 3)
+
+        obj_x_axis = quat_rotate(obj_quat, y_local)
+
+        return obj_x_axis
 
     def get_head_image(self):
         head_image = self.head_rgb_tensors
