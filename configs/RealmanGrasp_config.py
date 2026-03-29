@@ -7,8 +7,9 @@ args = gymutil.parse_arguments(
         {"name": "--use_gpu", "type": bool, "default": True, "help": "Use GPU for physics"},
         {"name": "--use_gpu_pipeline", "type": bool, "default": False, "help": "Use GPU pipeline"},
         {"name": "--headless", "type": bool, "default": False, "help": "Run simulation without viewer"},
+        {"name": "--enable_camera_render", "type": bool, "default": False, "help": "Render camera sensors and cache image outputs"},
         {"name": "--logdir", "type": str, "default": "logs", "help": "Directory for logging"},
-        {"name": "--num_envs", "type":int, "default":20, "help": "the number of environments to train"},
+        {"name": "--num_envs", "type":int, "default":4096, "help": "the number of environments to train"},
     ]   
 )
 
@@ -24,7 +25,9 @@ class GlobalCfg:
 
         self.robot_type = "realman" 
         self.control_type = "position"
-        self.obs_type = None
+        self.obs_type = None 
+        #self.obs_type = "point_cloud"
+        
 
 class GymCfg:
     """仿真器配置"""
@@ -34,6 +37,7 @@ class GymCfg:
         self.headless = False
         self.use_gpu = True
         self.use_gpu_pipeline = True
+        self.enable_camera_render = False
 
         # 如果传了 args，就覆盖默认值
         if args is not None:
@@ -51,7 +55,18 @@ class RobotCfg:
         self.obs_type = global_cfg.obs_type
         self.block_gripper = True
         self.num_actions = 14 
-        self.num_obs = 46 
+        self.num_obs = 46
+        self.obs_spec = [
+            "joint_pos",  # 特殊处理：调用get_joint_pos并进行切片
+            "right_ee_position",
+            "right_ee_orientation",
+            "right_ee_velocity",
+            "right_ee_angular_velocity",
+            "right_gripper_to_object_distance",
+            "right_gripper_mid_position",
+            "top_obj_position",
+            "top_obj_quaternion"
+        ] 
         self.robot_num_dofs = 14
         self.num_envs = global_cfg.num_envs  # 修改其他配置一致
         self.control_type_sim = global_cfg.control_type
@@ -152,8 +167,8 @@ class TaskCfg:
         self.c10 = 2
         self.c11 = 100
         self.c12 = 7 #7
-        self.c13 = 3 #3
-        self.c14 = 3
+        self.c13 = 5 #3
+        self.c14 = 5
 
         self.alpha_mid =1.5
         self.alpha_pos =1.5
@@ -184,7 +199,7 @@ class AllCfg:
         self.num_envs = global_cfg.num_envs
         self.num_achieved_goal = 3
         self.num_desired_goal = 3
-        self.max_episode_length = 800
+        self.max_episode_length = 1000
         self.max_episode_length_s = 4.0  # 秒数形式（用于日志统计）
         self.decimation = 4
         self.control_type_sim = global_cfg.control_type

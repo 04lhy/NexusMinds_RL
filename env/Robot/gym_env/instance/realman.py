@@ -1,13 +1,13 @@
 import numpy as np
 from ....core import Robot
-from ..sim.pygym_DexGrasp import Gym
+from ..sim.realman_gym import RealmanGym
 import torch
 
 
 # 测试环境，只测试对应的仿真当中的抓取环节。
 
 class Realman(Robot):
-    def __init__(self, sim: Gym, cfg):
+    def __init__(self, sim: RealmanGym, cfg):
         # 那么这个地方按照sim，就是以文档里面的 官方文档的prepare_sim为界限
         self.num_actions = cfg.num_actions
         self.num_obs = cfg.num_obs
@@ -25,7 +25,7 @@ class Realman(Robot):
                 self.kv[i] = self.cfg.damping[dof_name]
 
         # 准备资产，创建环境，为后续的控制做好准备
-        self.sim.pre_simulate(cfg.num_envs, cfg.asset, cfg.urdf_files_dict, cfg.base_pose, cfg.base_orn, cfg.control_type, cfg.obs_type, cfg.robot_type)
+        self.sim.pre_simulate(cfg.num_envs, cfg.asset, cfg.urdf_files_dict, cfg.base_pose, cfg.base_orn, cfg.control_type, cfg.obs_type)
 
         initial_steps = 10
         for i in range(initial_steps):
@@ -100,24 +100,23 @@ class Realman(Robot):
             raise Exception("需要更新其他的控制方式")
 
     def get_obs(self) -> torch.Tensor:
-        # end-effector position  velocity orientation  angular velocity
-        dof_pos = self.sim.get_joint_pos()[:, 1:].squeeze(-1)
-        ee_position = self.sim.get_right_ee_position()
-        ee_orientation = self.sim.get_right_ee_orientation()
-        ee_velocity = self.sim.get_right_ee_velocity()
-        ee_angular_velocity = self.sim.get_right_ee_angular_velocity()
-        middle_point_to_object_distance = self.sim.get_right_gripper_to_object_distance() 
-        middle_point = self.sim.get_right_gripper_mid_position() 
-        obj_pos = self.sim.get_top_obj_position()
-        obj_quat = self.sim.get_top_obj_quaternion() 
-        # dpos = self.sim.get_dpos().flatten(1)
-        # dneg = self.sim.get_dneg().flatten(1)
+        # 隐式观测组件映射：直接根据obs_spec中的名称拼接get_前缀调用sim接口
+        # 类似core中_reward_functions的实现方式
+        obs_components = []
+        for obs_name in self.cfg.obs_spec:
+            # 特殊处理：joint_pos需要调用get_joint_pos并进行切片
+            if obs_name == "joint_pos":
+                obs_components.append(self.sim.get_joint_pos()[:, 1:].squeeze(-1))
+                continue
 
+            # 直接拼接get_前缀
+            method_name = f"get_{obs_name}"
+            if hasattr(self.sim, method_name):
+                obs_components.append(getattr(self.sim, method_name)())
+            else:
+                raise ValueError(f"未知的观测组件名称: {obs_name}，sim中没有对应的方法 {method_name}")
 
-        observation = torch.cat(
-            [dof_pos, ee_position, ee_orientation, ee_velocity,  
-             ee_angular_velocity, middle_point_to_object_distance, middle_point, obj_pos, obj_quat]
-            , dim=1)
+        observation = torch.cat(obs_components, dim=1)
         return observation
 
     def reset_ids(self, env_ids):
@@ -131,43 +130,4 @@ class Realman(Robot):
         env_ids = torch.arange(self.num_envs, device=self.sim.device if hasattr(self.sim, 'device') else 'cpu')
         self.reset_ids(env_ids)
 
-    # 后面是根据机器的模型，自己定义的一些函数，服务于set_action,get_obs。
-    def ee_displacement_to_target_arm_angles(self, ee_displacement: np.ndarray) -> np.ndarray:
-        """Compute the target arm angles from the end-effector displacement.
-
-        Args:
-            ee_displacement (np.ndarray): End-effector displacement, as (dx, dy, dy).
-
-        Returns:
-            np.ndarray: Target arm angles, as the angles of the 7 arm joints.
-        """
-        ee_displacement = ee_displacement[:3] * 0.05  # limit maximum change in position
-        # get the current position and the target position
-        ee_position = self.sim.get_ee_position()
-        target_ee_position = ee_position + ee_displacement
-
-        # Clip the height target. For some reason, it has a great impact on learning
-        target_ee_position[2] = np.max((0, target_ee_position[2]))
-        # compute the new joint angles
-
-        target_arm_angles = self.sim.inverse_kinematics(
-            link=self.sim.ee_link, position=target_ee_position, orientation=np.array([1.0, 0.0, 0.0, 0.0])
-        )
-        target_arm_angles = target_arm_angles[:7]  # remove fingers angles
-        return target_arm_angles
-
-    def arm_joint_ctrl_to_target_arm_angles(self, arm_joint_ctrl: np.ndarray) -> np.ndarray:
-        """Compute the target arm angles from the arm joint control.
-
-        Args:
-            arm_joint_ctrl (np.ndarray): Control of the 7 joints.
-
-        Returns:
-            np.ndarray: Target arm angles, as the angles of the 7 arm joints.
-        """
-        arm_joint_ctrl = arm_joint_ctrl * 0.05  # limit maximum change in position
-        # get the current position and the target position
-        current_arm_joint_angles = np.array([self.sim.get_joint_angle(joint=i) for i in range(7)])
-        target_arm_angles = current_arm_joint_angles + arm_joint_ctrl
-        return target_arm_angles
 

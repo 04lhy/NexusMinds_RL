@@ -31,12 +31,13 @@ def _find_latest_checkpoint(log_dir: str) -> Optional[str]:
 def eval_policy(model_path: Optional[str] = None, episodes: int = 10, deterministic: bool = True):
 
     cfg = RealGraspCfg()
+    cfg.gymcfg.enable_camera_render = True
     train_cfg = class_to_dict(rslCfgPPO())
     env = RealmanGraspSingleGym(cfg)
     runner = OnPolicyRunner(env=env, train_cfg=train_cfg, log_dir=None, device=str(env.device))
 
     if model_path is None:
-        model_path = _find_latest_checkpoint(log_dir="logs")
+        model_path = _find_latest_checkpoint(log_dir="logs_test")
         if model_path is None:
             raise FileNotFoundError("未找到 checkpoint，请先训练或通过 --model 指定路径")
     if not os.path.isfile(model_path):
@@ -85,4 +86,3 @@ if __name__ == "__main__":
 
     # 目前 get_inference_policy 返回确定性策略，--stochastic 预留
     eval_policy(model_path=args.model, episodes=args.episodes, deterministic=not args.stochastic)
-

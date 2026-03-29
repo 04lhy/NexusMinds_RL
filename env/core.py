@@ -248,7 +248,7 @@ class RobotTaskEnv():
         robot_type = self.cfg.all.robot_type_sim
 
         if robot_type == "frankaLinker":
-            reset_events = self.sim.check_reset_events(robot_type)
+            reset_events = self.sim.check_reset_events()
             finger_collision_termination = reset_events['finger_collision']
             body_collision_termination = reset_events['body_collision']
             object_reset_termination = reset_events['obj_reset']
@@ -256,13 +256,13 @@ class RobotTaskEnv():
             self.reset_buf = self.time_out_buf |  task_success  | object_reset_termination | finger_collision_termination | body_collision_termination | grasp_untarget_termination
 
         elif robot_type == "realman":
-            reset_events = self.sim.check_reset_events(robot_type)
+            reset_events = self.sim.check_reset_events()
             object_reset_termination = reset_events['obj_reset']
             gripper_collision_termination = reset_events['gripper_collision']
             self.reset_buf = self.time_out_buf |  task_success  | object_reset_termination | gripper_collision_termination
 
         elif robot_type == "reallinker":
-            reset_events = self.sim.check_reset_events(robot_type)
+            reset_events = self.sim.check_reset_events()
             object_reset_termination = reset_events['obj_reset']
             right_hand_collision_termination = reset_events['right_hand_collision']
             self.reset_buf = self.time_out_buf |  task_success  | object_reset_termination | right_hand_collision_termination
@@ -328,5 +328,3 @@ class RobotTaskEnv():
 
     def close(self) -> None:
         self.sim.close()
-
-

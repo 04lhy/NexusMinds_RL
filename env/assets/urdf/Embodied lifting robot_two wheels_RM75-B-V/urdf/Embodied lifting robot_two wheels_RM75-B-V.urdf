@@ -97,8 +97,8 @@
     <axis
       xyz="0 0 -1" />
     <limit
-      lower="-0.9" 
-      upper="-0.9"
+      lower="-0.95" 
+      upper="-0.95"
       effort="0"
       velocity="0.001" />
   </joint>
@@ -981,5 +981,121 @@
       joint="Left_1_Joint2"
       multiplier="-1"
       offset="0" />
+  </joint>
+  <link
+    name="link_mid_1">
+    <inertial>
+      <origin
+        xyz="0.00541 -0.000077 -0.076042"
+        rpy="0 0 0" />
+      <mass
+        value="0.14" />
+      <inertia
+        ixx="0.000122559"
+        ixy="-1.63E-07"
+        ixz="3.095E-06"
+        iyy="0.000118553"
+        iyz="-2.12E-07"
+        izz="0.000161407" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="-1.57 0 0" />
+      <geometry>
+        <mesh
+          filename="package://Embodied lifting robot_two wheels_RM75-B-V/meshes/link_mid_1.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="1 1 1 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://Embodied lifting robot_two wheels_RM75-B-V/meshes/link_mid_1.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="joint_mid_1"
+    type="fixed">
+    <origin
+      xyz="0 -0.0675 0.21566"
+      rpy="0 0 1.5708" />
+    <parent
+      link="link_5" />
+    <child
+      link="link_mid_1" />
+    <axis
+      xyz="0 0 1" />
+    <limit
+      lower="-0.37"
+      upper="-0.37"
+      effort="7"
+      velocity="3.14" />
+  </joint>
+  <link
+    name="link_mid_2">
+    <inertial>
+      <origin
+        xyz="0.027378 0.026445 0.054976"
+        rpy="0 0 0" />
+      <mass
+        value="0.37" />
+      <inertia
+        ixx="0.00087368"
+        ixy="-5.05E-07"
+        ixz="6.378E-05"
+        iyy="6.37406E-04"
+        iyz="-2E-07"
+        izz="1.032833E-03" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="-1.57 0 0" />
+      <geometry>
+        <mesh
+          filename="package://Embodied lifting robot_two wheels_RM75-B-V/meshes/link_mid_2.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="1 1 1 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://Embodied lifting robot_two wheels_RM75-B-V/meshes/link_mid_2.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="joint_mid_2"
+    type="fixed">
+    <origin
+      xyz="0.02 -0.027 0.0965"
+      rpy="0 0 0" />
+    <parent
+      link="link_mid_1" />
+    <child
+      link="link_mid_2" />
+    <axis
+      xyz="0 -1 0" />
+    <limit
+      lower="-0.65"
+      upper="-0.65"
+      effort="7"
+      velocity="3.14" />
   </joint>
 </robot>
